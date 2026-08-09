@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.36;
 
-import {BaseStampRegistry} from "../src/BaseStampRegistry.sol";
+import { BaseStampRegistry } from "../src/BaseStampRegistry.sol";
 
 interface VmBroadcast {
     function startBroadcast() external;

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.36;
 
-import {BaseStampRegistry} from "../src/BaseStampRegistry.sol";
-import {TestBase, Vm} from "./utils/TestBase.sol";
+import { BaseStampRegistry } from "../src/BaseStampRegistry.sol";
+import { TestBase, Vm } from "./utils/TestBase.sol";
 
 contract RegistryHandler {
     struct Record {

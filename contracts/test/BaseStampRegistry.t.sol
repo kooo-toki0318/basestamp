@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.36;
 
-import {BaseStampRegistry} from "../src/BaseStampRegistry.sol";
-import {ERC1271WalletMock, StateChangingERC1271Mock} from "./mocks/ERC1271WalletMock.sol";
-import {TestBase} from "./utils/TestBase.sol";
+import { BaseStampRegistry } from "../src/BaseStampRegistry.sol";
+import { ERC1271WalletMock, StateChangingERC1271Mock } from "./mocks/ERC1271WalletMock.sol";
+import { TestBase } from "./utils/TestBase.sol";
 
 contract BaseStampRegistryTest is TestBase {
     bytes32 private constant DOMAIN_TYPEHASH =
@@ -254,7 +254,7 @@ contract BaseStampRegistryTest is TestBase {
     function test_NormalEtherTransferIsRejected() public {
         vm.deal(address(this), 1 ether);
 
-        (bool success,) = address(registry).call{value: 1 wei}("");
+        (bool success,) = address(registry).call{ value: 1 wei }("");
 
         assertFalse(success);
         assertEq(address(registry).balance, 0);
@@ -276,7 +276,7 @@ contract BaseStampRegistryTest is TestBase {
             _authorization(address(wallet), CONTENT, METADATA, NONCE, uint64(block.timestamp + 1 days));
 
         vm.expectRevert(BaseStampRegistry.InvalidAuthorizationSignature.selector);
-        registry.createStampFor{gas: 500_000}(auth, hex"1234");
+        registry.createStampFor{ gas: 500_000 }(auth, hex"1234");
     }
 
     function test_Eip712DomainIsFixedToChainAndRegistry() public view {

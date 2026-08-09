@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.36;
 
-import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
-import {SignatureChecker} from "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
+import { EIP712 } from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
+import { SignatureChecker } from "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
 
 /// @title BaseStampRegistry
 /// @notice Canonical, ownerless registry for privacy-preserving BaseStamp commitments.
@@ -47,7 +47,7 @@ contract BaseStampRegistry is EIP712 {
     error StampAlreadyExists(bytes32 stampId);
     error StampNotFound(bytes32 stampId);
 
-    constructor() EIP712("BaseStampRegistry", "1") {}
+    constructor() EIP712("BaseStampRegistry", "1") { }
 
     /// @notice Creates a stamp owned by the caller.
     function createStamp(bytes32 contentCommitment, bytes32 metadataHash, bytes32 stampNonce)

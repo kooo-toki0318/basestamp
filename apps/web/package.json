@@ -6,8 +6,8 @@
   "scripts": {
     "build": "vite build",
     "dev": "vite --host 0.0.0.0",
-    "d1:migrate:local": "wrangler d1 migrations apply basestamp-core --local",
-    "d1:migrations:list:local": "wrangler d1 migrations list basestamp-core --local",
+    "d1:migrate:local": "wrangler d1 migrations apply DB --local",
+    "d1:migrations:list:local": "wrangler d1 migrations list DB --local",
     "lint": "eslint .",
     "preview": "vite preview --host 0.0.0.0",
     "test": "vitest run",
