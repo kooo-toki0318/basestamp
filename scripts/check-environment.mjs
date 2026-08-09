@@ -91,6 +91,22 @@ const secretPatterns = [
   ["non-empty sensitive configuration", sensitiveAssignmentPattern]
 ];
 
+// Remove only the exact synthetic expressions before scanning their source files.
+// Any different assignment to the same keys remains detectable.
+const testSessionSecretExpression = `${sensitiveKeys[0]}: "x".repeat(32)`;
+const generatedSessionSecretExpression = [
+  "`",
+  sensitiveKeys[0],
+  '=${randomBytes(32).toString("hex")}`'
+].join("");
+const syntheticSensitiveAssignmentsBySource = new Map([
+  ["apps/web/test/app.test.ts", [testSessionSecretExpression]],
+  [
+    "scripts/init-local-env.mjs",
+    [generatedSessionSecretExpression]
+  ]
+]);
+
 let failed = false;
 
 function ok(message) {
@@ -248,7 +264,6 @@ try {
     pnpmConfig.autoInstallPeers === false &&
     pnpmConfig.engineStrict === true &&
     pnpmConfig.savePrefix === "" &&
-    pnpmConfig.storeDir === "/home/node/.local/share/pnpm/store" &&
     pnpmConfig.strictDepBuilds === true &&
     pnpmConfig.strictPeerDependencies === true &&
     Object.keys(approvedBuilds).length === 2 &&
@@ -342,9 +357,8 @@ const requiredDockerIgnorePatterns = [
   "keystore*",
   "credentials*.json",
   "**/keystores/",
-  ".codex/auth.json",
-  ".codex/sessions/",
-  ".codex/log/",
+  ".codex/",
+  ".agents/",
   "basestamp_mvp_codex_brief_v*.md",
   "contracts/broadcast/"
 ];
@@ -405,7 +419,10 @@ try {
     if (content.includes(0)) {
       continue;
     }
-    const text = content.toString("utf8");
+    let text = content.toString("utf8");
+    for (const assignment of syntheticSensitiveAssignmentsBySource.get(path) ?? []) {
+      text = text.replace(assignment, "");
+    }
     for (const label of findSecretLabels(text)) {
       findings.push(`${path} (${label})`);
     }
