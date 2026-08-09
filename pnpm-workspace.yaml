@@ -1,0 +1,17 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+autoInstallPeers: false
+engineStrict: true
+savePrefix: ""
+storeDir: /home/node/.local/share/pnpm/store
+strictDepBuilds: true
+strictPeerDependencies: true
+
+allowBuilds:
+  esbuild: true
+  workerd: true
+
+minimumReleaseAgeExclude:
+  - hono@4.12.34

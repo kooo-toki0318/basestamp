@@ -1,0 +1,34 @@
+{
+  "name": "basestamp",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Privacy-conscious record and verification tooling on Base",
+  "packageManager": "pnpm@11.4.0+sha512.f0febc7e37552ab485494a914241b338e0b3580b93d54ce31f00933015880863129038a1b4ae4e414a0ee63ac35bf21197e990172c4a68256450b5636310968f",
+  "engines": {
+    "node": "24.18.0",
+    "pnpm": "11.4.0"
+  },
+  "scripts": {
+    "build": "pnpm --filter @basestamp/web build && pnpm contracts:build",
+    "ci": "pnpm lint && pnpm typecheck && pnpm contracts:fmt:check && pnpm contracts:lint && pnpm test && pnpm contracts:artifact:check && pnpm d1:migrate:local && pnpm build",
+    "contracts:artifact:check": "node scripts/check-registry-artifact.mjs",
+    "contracts:build": "cd contracts && forge build",
+    "contracts:fmt": "cd contracts && forge fmt",
+    "contracts:fmt:check": "cd contracts && forge fmt --check",
+    "contracts:lint": "cd contracts && forge lint --no-cache --out cache/lint-out --deny warnings",
+    "contracts:test": "cd contracts && forge test",
+    "dev": "pnpm --filter @basestamp/web dev",
+    "d1:migrate:local": "pnpm --filter @basestamp/web d1:migrate:local",
+    "env:init": "node scripts/init-local-env.mjs",
+    "env:check": "node scripts/check-environment.mjs",
+    "lint": "pnpm --filter @basestamp/web lint",
+    "test": "pnpm test:web && pnpm contracts:test",
+    "test:web": "pnpm --filter @basestamp/web test",
+    "typecheck": "pnpm --filter @basestamp/web typecheck",
+    "wrangler": "wrangler"
+  },
+  "devDependencies": {
+    "@openzeppelin/contracts": "5.6.1",
+    "wrangler": "4.118.0"
+  }
+}

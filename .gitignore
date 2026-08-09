@@ -1,0 +1,53 @@
+# JavaScript / Cloudflare
+node_modules/
+.pnpm-store/
+.vite/
+.cache/
+dist/
+coverage/
+.wrangler/
+.rangler-dist/
+*.tsbuildinfo
+*.log
+
+# Runtime configuration and secrets
+.env
+.env.*
+!.env.example
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+keystore*
+credentials*.json
+**/keystores/
+.envrc
+
+# Local agent state
+.codex/
+.agents/
+
+# Private local planning documents
+basestamp_mvp_codex_brief_v*.md
+docs/HANDOFF.md
+
+# Foundry build and deployment artifacts
+/cache/
+/out/
+/broadcast/
+contracts/cache/
+contracts/out/
+contracts/broadcast/
+contracts/lib/
+
+# Editors and operating systems
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp

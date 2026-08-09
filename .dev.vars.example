@@ -1,0 +1,20 @@
+# Copy to .dev.vars for local Worker development. The real file is gitignored.
+# Leave every capability disabled until its milestone release gate passes.
+APP_ENV=
+MAINNET_WRITES_ENABLED=false
+SPONSOR_ENABLED=false
+X402_TESTNET_ENABLED=false
+X402_MAINNET_ENABLED=false
+SIWE_ALLOWED_DOMAIN=
+SIWE_ALLOWED_ORIGIN=
+SIWE_CHAIN_IDS=
+
+# Local-only secret placeholders. Never commit real values.
+SESSION_HASH_SECRET=
+IP_BUCKET_HMAC_SECRET=
+SPONSOR_ID_HMAC_SECRET=
+TURNSTILE_SECRET_KEY=
+CDP_PAYMASTER_URL=
+CDP_PROJECT_ID=
+CDP_API_KEY_ID=
+CDP_API_KEY_SECRET=

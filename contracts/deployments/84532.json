@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "network": "base-sepolia",
+  "chainId": 84532,
+  "registryAddress": "0x6491b8FBB13f7ADa916dD81B0834B529285f4EdB",
+  "transactionHash": "0x06e54d004389016a27271d8ba8523067244962057137342cb5437fc8e967809b",
+  "blockNumber": 44999837,
+  "blockHash": "0x0baf45ade66b2d2dba15a24d8790a1517036cb1b2f382be03627271f9f3e2796",
+  "blockTimestamp": "2026-08-03T14:39:22Z",
+  "sourceVerification": {
+    "provider": "Sourcify",
+    "status": "exact_match",
+    "creationMatch": "exact_match",
+    "runtimeMatch": "exact_match",
+    "verifiedAt": "2026-08-03T14:41:17Z",
+    "jobId": "cd0b9f90-7e71-4473-b84f-b8d69d862731",
+    "matchId": "43247636",
+    "blockscoutStatus": "Pass - Verified",
+    "blockscoutUrl": "https://base-sepolia.blockscout.com/address/0x6491b8FBB13f7ADa916dD81B0834B529285f4EdB"
+  },
+  "compiler": {
+    "version": "0.8.36+commit.8a079791",
+    "evmVersion": "osaka",
+    "optimizerEnabled": true,
+    "optimizerRuns": 200
+  },
+  "bytecode": {
+    "immutableNormalizedRuntimeHash": "0xab6d923e4d5e088f958cc47d06696abdd29f0772164f54e83578c5ac9909ec22"
+  }
+}

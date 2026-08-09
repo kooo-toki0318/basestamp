@@ -1,0 +1,5 @@
+# This profile is copied only into the isolated Dev Container's CODEX_HOME.
+# Docker is the outer sandbox: the container is non-root, has no extra Linux
+# capabilities, has no Docker socket, and does not mount the host Codex home.
+approval_policy = "untrusted"
+sandbox_mode = "danger-full-access"

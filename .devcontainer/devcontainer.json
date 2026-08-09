@@ -1,0 +1,45 @@
+{
+  "name": "BaseStamp",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
+  "remoteUser": "node",
+  "containerUser": "node",
+  "workspaceFolder": "/workspaces/base-stamp",
+  "mounts": [
+    "source=basestamp-pnpm-store,target=/home/node/.local/share/pnpm/store,type=volume",
+    "source=basestamp-foundry-keystore,target=/home/node/.foundry/keystores,type=volume",
+    "source=basestamp-codex-home,target=/home/node/.codex,type=volume"
+  ],
+  "forwardPorts": [5173, 8787, 8545, 9545],
+  "portsAttributes": {
+    "5173": {
+      "label": "Vite"
+    },
+    "8787": {
+      "label": "Cloudflare Worker"
+    },
+    "8545": {
+      "label": "Anvil"
+    },
+    "9545": {
+      "label": "Foundry browser wallet"
+    }
+  },
+  "postCreateCommand": "pnpm install --frozen-lockfile",
+  "shutdownAction": "stopContainer",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "openai.chatgpt",
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "tamasfe.even-better-toml"
+      ],
+      "settings": {
+        "chatgpt.openOnStartup": true
+      }
+    }
+  }
+}
