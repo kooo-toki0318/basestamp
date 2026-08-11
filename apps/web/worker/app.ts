@@ -52,6 +52,7 @@ import {
   proxyPaymasterRequest,
   type ProxyPaymasterResponse
 } from "./paymaster";
+import { readCleanupHealth } from "./cleanup";
 
 const SESSION_COOKIE = "__Host-basestamp_session";
 const NONCE_TTL_SECONDS = 10 * 60;
@@ -330,6 +331,14 @@ export function createCoreApp(dependencies: Dependencies = {}) {
   app.get("/api/health", (context) =>
     context.json({ ok: true, service: "basestamp-core", milestone: "2b" })
   );
+
+  app.get("/api/health/retention", async (context) => {
+    const health = await readCleanupHealth(context.env.DB);
+    return context.json(
+      { ok: health.healthy, cleanup: health },
+      health.healthy ? 200 : 503
+    );
+  });
 
   app.get("/api/locale", (context) => {
     const locale = detectLocaleFromAcceptLanguage(
