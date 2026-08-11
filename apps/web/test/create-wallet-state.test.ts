@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { getCreateWalletState } from "../src/create-wallet-state";
+import {
+  getCreateConfirmationState,
+  getCreateWalletState
+} from "../src/create-wallet-state";
 
 describe("Create wallet readiness", () => {
   it("requires the live wallet chain to match the selected chain", () => {
@@ -16,5 +19,16 @@ describe("Create wallet readiness", () => {
     expect(getCreateWalletState(true, 84532, 84532, false)).toBe(
       "authentication-required"
     );
+  });
+});
+
+describe("Create transaction confirmation", () => {
+  it("shows automatic confirmation while the submitted transaction is busy", () => {
+    expect(getCreateConfirmationState(true, true)).toBe("confirming");
+  });
+
+  it("offers retry only after automatic confirmation has stopped", () => {
+    expect(getCreateConfirmationState(true, false)).toBe("retry");
+    expect(getCreateConfirmationState(false, true)).toBe("idle");
   });
 });

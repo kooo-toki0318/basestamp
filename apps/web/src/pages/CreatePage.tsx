@@ -14,7 +14,10 @@ import { localeTag } from "../locale";
 import { FilePreview } from "../components/FilePreview";
 import { HandoffStory } from "../components/HandoffStory";
 import { QrCode } from "../components/QrCode";
-import { getCreateWalletState } from "../create-wallet-state";
+import {
+  getCreateConfirmationState,
+  getCreateWalletState
+} from "../create-wallet-state";
 import { getCreateHandoffStep } from "../handoff-role";
 import { calculateFileCommitment } from "../lib/commitment-worker";
 import {
@@ -160,6 +163,10 @@ export function CreatePage({
     authenticatedAddress
   );
   const readyToRecord = walletState === "ready";
+  const confirmationState = getCreateConfirmationState(
+    pendingConfirmation !== undefined,
+    busy
+  );
 
   const handoffUrl =
     package_ === undefined
@@ -701,7 +708,10 @@ export function CreatePage({
           <p className="muted">{t("create.saltWarning")}</p>
         </section>
 
-        <section className="panel">
+        <section
+          className="panel"
+          aria-busy={confirmationState === "confirming"}
+        >
           <span className="step-label">{t("create.step3")}</span>
           {package_ === undefined ? (
             <>
@@ -721,19 +731,38 @@ export function CreatePage({
                   </p>
                 )}
               {pendingConfirmation !== undefined && (
-                <a
-                  href={
-                    "https://sepolia.basescan.org/tx/" +
-                    pendingConfirmation.transactionHash
-                  }
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  {t("create.viewTransaction")}
-                </a>
+                <>
+                  {confirmationState === "confirming" && (
+                    <div className="confirmation-progress" role="status">
+                      <span
+                        className="confirmation-spinner"
+                        aria-hidden="true"
+                      />
+                      <div>
+                        <strong>{t("create.confirmingTitle")}</strong>
+                        <p>{t("create.confirmingBody")}</p>
+                      </div>
+                    </div>
+                  )}
+                  <a
+                    href={
+                      "https://sepolia.basescan.org/tx/" +
+                      pendingConfirmation.transactionHash
+                    }
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {t("create.viewTransaction")}
+                  </a>
+                </>
               )}
               <button
                 type="button"
+                className={
+                  confirmationState === "confirming"
+                    ? "confirmation-button is-confirming"
+                    : undefined
+                }
                 onClick={() => void submit()}
                 disabled={
                   busy ||
@@ -743,9 +772,19 @@ export function CreatePage({
                       !registryAvailable))
                 }
               >
-                {pendingConfirmation === undefined
+                {confirmationState === "idle"
                   ? t("create.recordOn", { network: selectedNetwork.name })
-                  : t("create.retryConfirmation")}
+                  : confirmationState === "confirming"
+                    ? (
+                        <span className="confirmation-button-content">
+                          <span
+                            className="confirmation-spinner compact"
+                            aria-hidden="true"
+                          />
+                          {t("create.confirming")}
+                        </span>
+                      )
+                    : t("create.retryConfirmation")}
               </button>
               <p className="muted">
                 {registryAvailable

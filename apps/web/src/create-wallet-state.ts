@@ -4,6 +4,8 @@ export type CreateWalletState =
   | "authentication-required"
   | "ready";
 
+export type CreateConfirmationState = "idle" | "confirming" | "retry";
+
 export function getCreateWalletState(
   connected: boolean,
   walletChainId: number | undefined,
@@ -13,4 +15,12 @@ export function getCreateWalletState(
   if (!connected) return "disconnected";
   if (walletChainId !== selectedChainId) return "wrong-network";
   return authenticated ? "ready" : "authentication-required";
+}
+
+export function getCreateConfirmationState(
+  hasPendingConfirmation: boolean,
+  busy: boolean
+): CreateConfirmationState {
+  if (!hasPendingConfirmation) return "idle";
+  return busy ? "confirming" : "retry";
 }
