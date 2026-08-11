@@ -5,7 +5,8 @@ import {
   isAddressEqual,
   parseEventLogs,
   type Address,
-  type Hex
+  type Hex,
+  type TransactionReceipt
 } from "viem";
 import { useWriteContract } from "wagmi";
 import type { Session } from "../auth-types";
@@ -68,6 +69,10 @@ type PendingConfirmation = {
   transactionHash: Hex;
 };
 
+const CONFIRMATION_WINDOW_MS = 5 * 60 * 1000;
+const CONFIRMATION_ATTEMPT_MS = 30 * 1000;
+const CONFIRMATION_RETRY_DELAY_MS = 1500;
+
 type CreatePageProperties = {
   address: Address | undefined;
   walletChainId: number | undefined;
@@ -108,6 +113,40 @@ function downloadPackage(package_: VerificationPackage): void {
   anchor.download = "basestamp-" + package_.stampId.slice(2, 14) + ".json";
   anchor.click();
   URL.revokeObjectURL(objectUrl);
+}
+
+function delay(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, milliseconds);
+  });
+}
+
+async function waitForAutomaticConfirmation(
+  transactionHash: Hex
+): Promise<TransactionReceipt> {
+  const deadline = Date.now() + CONFIRMATION_WINDOW_MS;
+  let lastError: unknown;
+
+  while (Date.now() < deadline) {
+    try {
+      return await baseSepoliaPublicClient.waitForTransactionReceipt({
+        hash: transactionHash,
+        confirmations: 1,
+        // Base Account can return the hash before a public RPC can retrieve
+        // the transaction. Receipt polling avoids treating that indexing gap
+        // as a failed replacement check.
+        checkReplacement: false,
+        timeout: CONFIRMATION_ATTEMPT_MS
+      });
+    } catch (error) {
+      lastError = error;
+      if (Date.now() >= deadline) break;
+      await delay(CONFIRMATION_RETRY_DELAY_MS);
+    }
+  }
+
+  if (lastError instanceof Error) throw lastError;
+  throw new Error("Transaction confirmation timed out.");
 }
 
 export function CreatePage({
@@ -379,10 +418,7 @@ export function CreatePage({
       } = activeConfirmation;
 
       setStatus(t("create.status.waiting"));
-      const receipt = await baseSepoliaPublicClient.waitForTransactionReceipt({
-        hash: transactionHash,
-        confirmations: 1
-      });
+      const receipt = await waitForAutomaticConfirmation(transactionHash);
       if (receipt.status !== "success") {
         setPendingConfirmation(undefined);
         activeConfirmation = undefined;
