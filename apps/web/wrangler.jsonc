@@ -35,13 +35,7 @@
     "enabled": false
   },
   "secrets": {
-    "required": [
-      "SESSION_HASH_SECRET",
-      "BASE_BUILDER_CODE",
-      "CDP_PAYMASTER_URL",
-      "IP_BUCKET_HMAC_SECRET",
-      "SPONSOR_ID_HMAC_SECRET",
-      "TURNSTILE_SECRET_KEY"
-    ]
+    // Sponsorship secrets become required as part of its explicit release gate.
+    "required": ["SESSION_HASH_SECRET"]
   }
 }
