@@ -1,7 +1,6 @@
 import {
   decodeAbiParameters,
   decodeFunctionData,
-  getAddress,
   isAddressEqual,
   keccak256,
   type Address,
@@ -11,60 +10,23 @@ import {
   type Transport
 } from "viem";
 import {
+  BASE_ACCOUNT_ERC6492_VALIDATOR,
+  BASE_ACCOUNT_FACTORY,
+  BASE_ACCOUNT_FACTORY_CODE_HASH,
+  BASE_ACCOUNT_IMPLEMENTATION,
+  BASE_ACCOUNT_IMPLEMENTATION_CODE_HASH,
+  BASE_ACCOUNT_VALIDATOR_CODE_HASH,
+  baseAccountFactoryAbi
+} from "./base-account";
+import {
   HANDOFF_PRIMARY_TYPE,
   HANDOFF_TYPES,
   type HandoffChallenge,
   type SignatureValidation
 } from "./handoff";
 
-export const BASE_ACCOUNT_FACTORY = getAddress(
-  "0xba5ed110efdba3d005bfc882d75358acbbb85842"
-);
-export const BASE_ACCOUNT_IMPLEMENTATION = getAddress(
-  "0x00000110dCdEdC9581cb5eCB8467282f2926534d"
-);
-export const BASE_ACCOUNT_ERC6492_VALIDATOR = getAddress(
-  "0xcfCE48B757601F3f351CB6f434CB0517aEEE293D"
-);
-
-const BASE_ACCOUNT_FACTORY_CODE_HASH =
-  "0xb60a629aa7c6af9b550871fd21b67ab84638156683cec68491049cb5d235ed2f";
-const BASE_ACCOUNT_IMPLEMENTATION_CODE_HASH =
-  "0x136185896fc519277ec953c0b3d048fc0c9f607b8d04022e60f23ef8dbc6c4d5";
-const BASE_ACCOUNT_VALIDATOR_CODE_HASH =
-  "0x94a000eab18fdda0465241bd0e82487463fb2e539854a3645542e57ed8dde484";
 const ERC6492_MAGIC =
   "6492649264926492649264926492649264926492649264926492649264926492";
-
-const baseAccountFactoryAbi = [
-  {
-    type: "function",
-    name: "createAccount",
-    stateMutability: "payable",
-    inputs: [
-      { name: "owners", type: "bytes[]" },
-      { name: "nonce", type: "uint256" }
-    ],
-    outputs: [{ name: "account", type: "address" }]
-  },
-  {
-    type: "function",
-    name: "getAddress",
-    stateMutability: "view",
-    inputs: [
-      { name: "owners", type: "bytes[]" },
-      { name: "nonce", type: "uint256" }
-    ],
-    outputs: [{ name: "", type: "address" }]
-  },
-  {
-    type: "function",
-    name: "implementation",
-    stateMutability: "view",
-    inputs: [],
-    outputs: [{ name: "", type: "address" }]
-  }
-] as const;
 
 export class UnsupportedCounterfactualSignatureError extends Error {}
 
