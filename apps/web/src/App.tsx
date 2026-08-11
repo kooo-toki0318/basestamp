@@ -6,6 +6,7 @@ import {
   useConnection,
   useConnectors,
   useDisconnect,
+  useSignTypedData,
   useSwitchChain
 } from "wagmi";
 import { createSiweMessage } from "viem/siwe";
@@ -18,8 +19,10 @@ import {
   type NonceResponse,
   type SignedSiweMessage
 } from "./auth-client";
-import { useI18n, type MessageKey, type Translate } from "./i18n-context";
+import { parseJsonResponse } from "./api-client";
+import { useI18n } from "./i18n-context";
 import { CreatePage } from "./pages/CreatePage";
+import { HandoffPage } from "./pages/HandoffPage";
 import { HomePage } from "./pages/HomePage";
 import { StampPage } from "./pages/StampPage";
 import { VerifyStartPage } from "./pages/VerifyStartPage";
@@ -58,47 +61,19 @@ type AuthFeedback = {
   tone: AuthTone;
 };
 
-const API_ERROR_KEYS: Readonly<Record<string, MessageKey>> = {
-  auth_not_configured: "api.authNotConfigured",
-  internal_error: "api.internalError",
-  invalid_authentication: "api.invalidAuthentication",
-  invalid_body: "api.invalidRequest",
-  invalid_json: "api.invalidRequest",
-  not_found: "api.notFound",
-  origin_rejected: "api.originRejected",
-  payload_too_large: "api.payloadTooLarge",
-  unsupported_chain: "api.unsupportedChain",
-  unsupported_media_type: "api.invalidRequest"
-};
-
 function shortAddress(address: string): string {
   return address.slice(0, 6) + "…" + address.slice(-4);
 }
 
-async function parseJsonResponse<T>(
-  response: Response,
-  t: Translate
-): Promise<T> {
-  const value = (await response.json()) as
-    | T
-    | { error?: { code?: string; message?: string } };
-  if (!response.ok) {
-    const errorValue = value as {
-      error?: { code?: string; message?: string };
-    };
-    const code = errorValue.error?.code;
-    const messageKey = code === undefined ? undefined : API_ERROR_KEYS[code];
-    const message =
-      messageKey === undefined
-        ? (errorValue.error?.message ?? t("api.requestFailed"))
-        : t(messageKey);
-    throw new Error(message);
-  }
-  return value as T;
-}
-
 function currentStampId(): Hex | undefined {
   const match = /^\/stamps\/(0x[0-9a-fA-F]{64})\/?$/u.exec(
+    window.location.pathname
+  );
+  return match?.[1]?.toLowerCase() as Hex | undefined;
+}
+
+function currentHandoffStampId(): Hex | undefined {
+  const match = /^\/handoff\/(0x[0-9a-fA-F]{64})\/?$/u.exec(
     window.location.pathname
   );
   return match?.[1]?.toLowerCase() as Hex | undefined;
@@ -114,6 +89,7 @@ export function App() {
   const connectors = useConnectors();
   const { mutateAsync: connectAsync } = useConnect();
   const { mutate: disconnect } = useDisconnect();
+  const { mutateAsync: signTypedDataAsync } = useSignTypedData();
   const {
     mutateAsync: switchChainAsync,
     isPending: networkBusy
@@ -450,6 +426,7 @@ export function App() {
   const displayedAuthStatus =
     authFeedback.message === "" ? t("auth.ready") : authFeedback.message;
   const stampId = currentStampId();
+  const handoffStampId = currentHandoffStampId();
   const path = window.location.pathname;
 
   let page: React.ReactNode;
@@ -479,6 +456,48 @@ export function App() {
     );
   } else if (path === "/verify" || path === "/verify/") {
     page = <VerifyStartPage />;
+  } else if (handoffStampId !== undefined) {
+    page = (
+      <HandoffPage
+        stampId={handoffStampId}
+        address={address}
+        walletChainId={walletChainId}
+        selectedChainId={selectedChainId}
+        session={session}
+        authBusy={authBusy || networkBusy}
+        baseSignInAvailable={baseConnector !== undefined}
+        browserSignInAvailable={injectedConnector !== undefined}
+        onSignInBase={() => {
+          if (baseConnector !== undefined) void signIn(baseConnector);
+        }}
+        onSignInBrowser={() => {
+          if (injectedConnector !== undefined) void signIn(injectedConnector);
+        }}
+        onAuthenticate={() => {
+          if (activeConnector !== undefined) void signIn(activeConnector);
+        }}
+        onSelectBaseSepolia={() => {
+          selectNetwork(84532);
+        }}
+        onEnsureNetwork={() => ensureSelectedNetwork()}
+        onSignTypedData={(challenge) =>
+          signTypedDataAsync({
+            account: address,
+            connector: activeConnector,
+            domain: challenge.domain,
+            types: challenge.types,
+            primaryType: challenge.primaryType,
+            message: {
+              ...challenge.message,
+              issuedAt: BigInt(challenge.message.issuedAt),
+              challengeExpiresAt: BigInt(
+                challenge.message.challengeExpiresAt
+              )
+            }
+          })
+        }
+      />
+    );
   } else if (stampId !== undefined) {
     page = <StampPage stampId={stampId} />;
   } else {

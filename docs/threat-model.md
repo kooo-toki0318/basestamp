@@ -28,7 +28,10 @@ Onchain state remains the canonical source for stamps.
 | CSRF | SameSite cookie plus exact Origin checks on state-changing session endpoints |
 | Framing and content sniffing | CSP `frame-ancestors 'none'`, X-Frame-Options, nosniff |
 | Oversized or ambiguous JSON | Content-type requirement, body-size bound, exact key sets |
-| Smart-account signature confusion | Viem public-client verification for EOA, ERC-1271, and ERC-6492 |
+| Handoff-key leakage | Fragment-only key, no-referrer policy, capture and History API removal before app requests, no analytics, explicit-only QR/Web Share |
+| False server attestation | Receipt UI states that the Worker never receives the file or salt and verifies only the wallet's signed acknowledgement |
+| Handoff challenge replay | CSPRNG nonce hash, ten-minute maximum lifetime, wallet/chain/stamp binding, and conditional one-time consumption |
+| Smart-account signature confusion | Block-pinned Viem verification for EOA and ERC-1271; ERC-6492 additionally requires the fixed Base Account factory, implementation, validator, predicted signer, and runtime code hashes |
 | Secret or personal-data leakage | No request-body logging, generic errors, no raw IP persistence |
 | File upload or accidental exfiltration | No upload route; file bytes and salts are handled only in the browser |
 

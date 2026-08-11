@@ -32,6 +32,19 @@ export async function readRegistryStamp(stampId: Hex): Promise<RegistryStamp> {
   });
 }
 
+export async function readRegistryStampAtBlock(
+  stampId: Hex,
+  blockNumber: bigint
+): Promise<RegistryStamp> {
+  return baseSepoliaPublicClient.readContract({
+    address: BASE_SEPOLIA_DEPLOYMENT.registryAddress,
+    abi: registryAbi,
+    functionName: "getStamp",
+    args: [stampId],
+    blockNumber
+  });
+}
+
 export async function verifyPackageOnchain(
   package_: VerificationPackage
 ): Promise<RegistryStamp> {

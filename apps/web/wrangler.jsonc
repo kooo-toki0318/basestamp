@@ -28,5 +28,8 @@
   ],
   "observability": {
     "enabled": false
+  },
+  "secrets": {
+    "required": ["SESSION_HASH_SECRET"]
   }
 }

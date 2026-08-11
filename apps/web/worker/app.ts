@@ -1,12 +1,35 @@
 import { getCookie, setCookie } from "hono/cookie";
 import { Hono } from "hono";
 import { secureHeaders } from "hono/secure-headers";
-import { createPublicClient, http, isAddress, type Hex } from "viem";
+import {
+  createPublicClient,
+  getAddress,
+  http,
+  isAddress,
+  type Address,
+  type Hex
+} from "viem";
 import { base, baseSepolia } from "viem/chains";
 import { generateSiweNonce, parseSiweMessage } from "viem/siwe";
 import { validateSiweFields } from "./auth-policy";
 import { detectLocaleFromAcceptLanguage } from "../src/locale-negotiation";
-import { hmacSha256Hex, randomToken, sha256Hex } from "./crypto";
+import { hmacSha256Hex, randomHex32, randomToken, sha256Hex } from "./crypto";
+import { BASE_SEPOLIA_DEPLOYMENT } from "../src/lib/deployment";
+import { registryAbi } from "../src/lib/registry";
+import { formatUnixSeconds } from "../src/lib/verification-package";
+import {
+  HANDOFF_CHALLENGE_TTL_SECONDS,
+  HANDOFF_PRIMARY_TYPE,
+  HANDOFF_STATEMENT,
+  HANDOFF_TYPES,
+  createHandoffDomain,
+  type HandoffChallenge,
+  type HandoffVerification
+} from "../src/lib/handoff";
+import {
+  UnsupportedCounterfactualSignatureError,
+  verifyHandoffTypedDataSignature
+} from "../src/lib/handoff-signature";
 import { ApiError, assertExactKeys, readJsonObject } from "./http";
 import type { AuthConfig, Bindings } from "./types";
 
@@ -25,8 +48,24 @@ type VerifyArguments = {
   now: Date;
 };
 
+type HandoffStamp = { contentCommitment: Hex };
+
+type VerifyHandoffArguments = {
+  signer: Address;
+  challenge: HandoffChallenge;
+  signature: Hex;
+};
+
+type VerifyHandoffResult = Omit<HandoffVerification, "verified"> & {
+  valid: boolean;
+};
+
 type Dependencies = {
   verifySiweSignature?: (arguments_: VerifyArguments) => Promise<boolean>;
+  readHandoffStamp?: (stampId: Hex) => Promise<HandoffStamp>;
+  verifyHandoffSignature?: (
+    arguments_: VerifyHandoffArguments
+  ) => Promise<VerifyHandoffResult>;
 };
 
 type NonceRow = {
@@ -40,6 +79,16 @@ type SessionRow = {
   wallet_address: string;
   chain_id: number;
   expires_at: number;
+};
+
+type HandoffChallengeRow = {
+  stamp_id: string;
+  statement_version: number;
+  wallet_address: string | null;
+  chain_id: number | null;
+  expires_at: number;
+  used_at: number | null;
+  created_at: number;
 };
 
 function getAuthConfig(env: Bindings): AuthConfig {
@@ -113,9 +162,97 @@ async function defaultVerifySiweSignature(arguments_: VerifyArguments): Promise<
   });
 }
 
+function createHandoffPublicClient() {
+  return createPublicClient({
+    chain: baseSepolia,
+    transport: http(BASE_SEPOLIA_DEPLOYMENT.rpcUrl)
+  });
+}
+
+async function defaultReadHandoffStamp(stampId: Hex): Promise<HandoffStamp> {
+  const client = createHandoffPublicClient();
+  return client.readContract({
+    address: BASE_SEPOLIA_DEPLOYMENT.registryAddress,
+    abi: registryAbi,
+    functionName: "getStamp",
+    args: [stampId]
+  });
+}
+
+async function defaultVerifyHandoffSignature(
+  arguments_: VerifyHandoffArguments
+): Promise<VerifyHandoffResult> {
+  const client = createHandoffPublicClient();
+  const block = await client.getBlock();
+  const stamp = await client.readContract({
+    address: BASE_SEPOLIA_DEPLOYMENT.registryAddress,
+    abi: registryAbi,
+    functionName: "getStamp",
+    args: [arguments_.challenge.message.stampId],
+    blockNumber: block.number
+  });
+  const signatureResult = await verifyHandoffTypedDataSignature(client, {
+    signer: arguments_.signer,
+    challenge: arguments_.challenge,
+    signature: arguments_.signature,
+    blockNumber: block.number
+  });
+  return {
+    valid:
+      stamp.contentCommitment ===
+        arguments_.challenge.message.contentCommitment &&
+      signatureResult.valid,
+    signatureValidation: signatureResult.signatureValidation,
+    verifiedAt: new Date().toISOString().replace(".000Z", "Z"),
+    verification: {
+      blockNumber: Number(block.number),
+      blockHash: block.hash,
+      blockTimestamp: formatUnixSeconds(block.timestamp)
+    }
+  };
+}
+
+async function readSession(
+  env: Bindings,
+  config: AuthConfig,
+  token: string | undefined
+): Promise<SessionRow | null> {
+  if (token === undefined) return null;
+  const tokenHash = await hmacSha256Hex(config.sessionHashSecret, token);
+  const now = Math.floor(Date.now() / 1000);
+  return env.DB.prepare(
+    "SELECT wallet_address, chain_id, expires_at FROM sessions " +
+      "WHERE token_hash = ? AND revoked_at IS NULL AND expires_at > ?"
+  )
+    .bind(tokenHash, now)
+    .first<SessionRow>();
+}
+
+function requireBytes32(value: unknown, field: string): Hex {
+  if (typeof value !== "string" || !/^0x[0-9a-f]{64}$/u.test(value)) {
+    throw new ApiError(400, "invalid_handoff", field + " is invalid.");
+  }
+  return value as Hex;
+}
+
+function requireHandoffSignature(value: unknown): Hex {
+  if (
+    typeof value !== "string" ||
+    value.length > 16_384 ||
+    !/^0x(?:[0-9a-fA-F]{2})+$/u.test(value)
+  ) {
+    throw new ApiError(400, "invalid_handoff", "Handoff signature is invalid.");
+  }
+  return value.toLowerCase() as Hex;
+}
+
 export function createCoreApp(dependencies: Dependencies = {}) {
   const verifySiweSignature =
     dependencies.verifySiweSignature ?? defaultVerifySiweSignature;
+  const readHandoffStamp =
+    dependencies.readHandoffStamp ?? defaultReadHandoffStamp;
+  const verifyHandoffSignature =
+    dependencies.verifyHandoffSignature ?? defaultVerifyHandoffSignature;
   const app = new Hono<{ Bindings: Bindings }>();
 
 
@@ -136,7 +273,7 @@ export function createCoreApp(dependencies: Dependencies = {}) {
   });
 
   app.get("/api/health", (context) =>
-    context.json({ ok: true, service: "basestamp-core", milestone: "2a" })
+    context.json({ ok: true, service: "basestamp-core", milestone: "2b" })
   );
 
   app.get("/api/locale", (context) => {
@@ -301,16 +438,7 @@ export function createCoreApp(dependencies: Dependencies = {}) {
   app.get("/api/session", async (context) => {
     const config = getAuthConfig(context.env);
     const token = getCookie(context, SESSION_COOKIE);
-    if (token === undefined) return context.json({ authenticated: false });
-
-    const tokenHash = await hmacSha256Hex(config.sessionHashSecret, token);
-    const now = Math.floor(Date.now() / 1000);
-    const session = await context.env.DB.prepare(
-      "SELECT wallet_address, chain_id, expires_at FROM sessions " +
-        "WHERE token_hash = ? AND revoked_at IS NULL AND expires_at > ?"
-    )
-      .bind(tokenHash, now)
-      .first<SessionRow>();
+    const session = await readSession(context.env, config, token);
     if (session === null) return context.json({ authenticated: false });
 
     return context.json({
@@ -319,6 +447,157 @@ export function createCoreApp(dependencies: Dependencies = {}) {
       chainId: session.chain_id,
       expiresAt: new Date(session.expires_at * 1000).toISOString()
     });
+  });
+
+  app.post("/api/handoff/challenge", async (context) => {
+    const config = getAuthConfig(context.env);
+    requireOrigin(context.req.raw, config);
+    const body = await readJsonObject(context.req.raw);
+    assertExactKeys(body, ["stampId"]);
+    const stampId = requireBytes32(body.stampId, "Stamp ID");
+
+    const session = await readSession(
+      context.env,
+      config,
+      getCookie(context, SESSION_COOKIE)
+    );
+    if (session === null) {
+      throw new ApiError(403, "authentication_required", "Authentication is required.");
+    }
+    if (session.chain_id !== BASE_SEPOLIA_DEPLOYMENT.chainId) {
+      throw new ApiError(400, "unsupported_chain", "Base Sepolia authentication is required.");
+    }
+
+    const stamp = await readHandoffStamp(stampId);
+    const ackNonce = randomHex32();
+    const ackNonceHash = await sha256Hex(ackNonce);
+    const issuedAt = Math.floor(Date.now() / 1000);
+    const challengeExpiresAt = issuedAt + HANDOFF_CHALLENGE_TTL_SECONDS;
+    await context.env.DB.prepare(
+      "INSERT INTO handoff_challenges " +
+        "(ack_nonce_hash, stamp_id, statement_version, wallet_address, " +
+        "chain_id, expires_at, used_at, created_at) " +
+        "VALUES (?, ?, ?, ?, ?, ?, NULL, ?)"
+    )
+      .bind(
+        ackNonceHash,
+        stampId,
+        1,
+        session.wallet_address,
+        session.chain_id,
+        challengeExpiresAt,
+        issuedAt
+      )
+      .run();
+
+    const challenge: HandoffChallenge = {
+      domain: createHandoffDomain(),
+      types: HANDOFF_TYPES,
+      primaryType: HANDOFF_PRIMARY_TYPE,
+      message: {
+        statement: HANDOFF_STATEMENT,
+        version: 1,
+        stampId,
+        contentCommitment: stamp.contentCommitment,
+        ackNonce,
+        issuedAt,
+        challengeExpiresAt
+      }
+    };
+    return context.json(challenge);
+  });
+
+  app.post("/api/handoff/verify", async (context) => {
+    const config = getAuthConfig(context.env);
+    requireOrigin(context.req.raw, config);
+    const body = await readJsonObject(context.req.raw);
+    assertExactKeys(body, ["ackNonce", "signature"]);
+    const ackNonce = requireBytes32(body.ackNonce, "Acknowledgement nonce");
+    const signature = requireHandoffSignature(body.signature);
+
+    const session = await readSession(
+      context.env,
+      config,
+      getCookie(context, SESSION_COOKIE)
+    );
+    if (session === null) {
+      throw new ApiError(403, "authentication_required", "Authentication is required.");
+    }
+
+    const ackNonceHash = await sha256Hex(ackNonce);
+    const now = Math.floor(Date.now() / 1000);
+    const row = await context.env.DB.prepare(
+      "SELECT stamp_id, statement_version, wallet_address, chain_id, " +
+        "expires_at, used_at, created_at FROM handoff_challenges " +
+        "WHERE ack_nonce_hash = ?"
+    )
+      .bind(ackNonceHash)
+      .first<HandoffChallengeRow>();
+    if (
+      row?.statement_version !== 1 ||
+      row.wallet_address !== session.wallet_address ||
+      row.chain_id !== session.chain_id ||
+      row.chain_id !== BASE_SEPOLIA_DEPLOYMENT.chainId ||
+      row.used_at !== null ||
+      row.expires_at <= now ||
+      row.created_at > now + 300 ||
+      row.expires_at <= row.created_at ||
+      row.expires_at - row.created_at > HANDOFF_CHALLENGE_TTL_SECONDS
+    ) {
+      throw new ApiError(400, "handoff_challenge_invalid", "Handoff challenge is invalid or expired.");
+    }
+
+    const stampId = requireBytes32(row.stamp_id, "Stored stamp ID");
+    const stamp = await readHandoffStamp(stampId);
+    const challenge: HandoffChallenge = {
+      domain: createHandoffDomain(),
+      types: HANDOFF_TYPES,
+      primaryType: HANDOFF_PRIMARY_TYPE,
+      message: {
+        statement: HANDOFF_STATEMENT,
+        version: 1,
+        stampId,
+        contentCommitment: stamp.contentCommitment,
+        ackNonce,
+        issuedAt: row.created_at,
+        challengeExpiresAt: row.expires_at
+      }
+    };
+
+    let result: VerifyHandoffResult;
+    try {
+      result = await verifyHandoffSignature({
+        signer: getAddress(session.wallet_address),
+        challenge,
+        signature
+      });
+    } catch (error) {
+      if (error instanceof UnsupportedCounterfactualSignatureError) {
+        throw new ApiError(400, "counterfactual_not_allowed", error.message);
+      }
+      throw error;
+    }
+    if (!result.valid) {
+      throw new ApiError(400, "handoff_signature_invalid", "Handoff signature is invalid.");
+    }
+
+    const consumed = await context.env.DB.prepare(
+      "UPDATE handoff_challenges SET used_at = ? " +
+        "WHERE ack_nonce_hash = ? AND wallet_address = ? " +
+        "AND used_at IS NULL AND expires_at > ?"
+    )
+      .bind(now, ackNonceHash, session.wallet_address, now)
+      .run();
+    if (consumed.meta.changes !== 1) {
+      throw new ApiError(400, "handoff_challenge_invalid", "Handoff challenge is invalid or expired.");
+    }
+
+    return context.json({
+      verified: true,
+      signatureValidation: result.signatureValidation,
+      verifiedAt: result.verifiedAt,
+      verification: result.verification
+    } satisfies HandoffVerification);
   });
 
   app.post("/api/auth/logout", async (context) => {

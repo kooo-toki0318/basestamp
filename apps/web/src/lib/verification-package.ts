@@ -207,6 +207,10 @@ class JsonSyntaxGuard {
   }
 }
 
+export function assertStrictJsonSyntax(source: string): void {
+  new JsonSyntaxGuard(source).scan();
+}
+
 function requireRecord(value: unknown, field: string): Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     throw new Error(field + " must be an object.");
@@ -303,7 +307,7 @@ export async function parseVerificationPackage(
   if (new TextEncoder().encode(source).byteLength > MAX_PACKAGE_BYTES) {
     throw new Error("Verification package exceeds the 64 KiB limit.");
   }
-  new JsonSyntaxGuard(source).scan();
+  assertStrictJsonSyntax(source);
 
   let parsed: unknown;
   try {

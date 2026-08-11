@@ -4,8 +4,8 @@ Private file records and independent verification on Base.
 
 BaseStamp lets you record that a specific file existed without uploading the
 file itself. It creates a salted commitment locally in your browser, stores the
-minimum public record on Base, and gives you a portable JSON package that
-another person can use to verify the file later.
+minimum public record on Base, and gives you both a private handoff link and a
+portable JSON archive for later verification.
 
 > BaseStamp verifies a match between file bytes and an onchain record. It does
 > not prove authorship, ownership, identity, acceptance, or legal validity.
@@ -24,23 +24,28 @@ The file bytes and file name are not sent to BaseStamp or written onchain.
 
 ### Share the handoff
 
-Send the recipient all three of these:
+For the simplest recipient flow, send:
 
 - the original file;
-- the BaseStamp verification JSON;
-- a link to the BaseStamp Verify page.
+- the private BaseStamp handoff link generated after confirmation.
 
-The file and JSON can be delivered through email, cloud storage, chat, or any
-other channel you already use.
+The link contains the private comparison key after its URL fragment marker
+(`#`). Share it only through a channel you trust. Keep the downloaded
+verification JSON as a portable archive; the classic JSON-based verification
+flow remains available.
 
 ### Verify a received file
 
-1. Open `/verify`.
-2. Select the received BaseStamp JSON.
-3. Select the candidate original file.
-4. BaseStamp checks the approved Registry record and compares the file locally.
+1. Open the complete private handoff link.
+2. Select the received file.
+3. BaseStamp checks the approved Registry and compares the file locally.
+4. After a match, optionally connect and authenticate a wallet to sign and
+   download a local Handoff Receipt.
 
-Verification does not require a wallet.
+The file-match check does not require a wallet. The optional Receipt records a
+wallet's statement that it observed a local match; it is not independent proof
+of the file bytes, identity, acceptance, or legal validity. A recipient can
+still open `/verify` and use the verification JSON instead.
 
 ## Useful when the exact file matters
 
@@ -61,12 +66,18 @@ BaseStamp is local-first:
   public onchain;
 - the verification JSON contains the salt needed for comparison and should be
   shared only with intended recipients;
+- the private handoff link contains that salt only in its URL fragment, which
+  is captured before app requests, removed from the address bar, and never sent
+  to the Worker, D1, RPC, or logs;
+- Handoff Receipts do not contain the content salt and are downloaded locally;
 - browser session storage is only a navigation convenience, not permanent
   package storage.
 
 Read the detailed [data boundaries](docs/data-boundaries.md),
 [authentication threat model](docs/threat-model.md), and
-[Registry security boundary](docs/registry-security.md).
+[Registry security boundary](docs/registry-security.md). The
+[Verified Handoff specification](docs/verified-handoff.md) documents the
+Receipt meaning and signature allowlist.
 
 ## Current release
 
@@ -79,7 +90,7 @@ Available:
 - Japanese and English UI catalogs with request/browser-language initialization and a persisted explicit selector;
 - a shared handoff story on Home, Create, and Verify, with Create progress advancing from authentication to recording and sharing;
 - wallet-connect and authentication prompts on Create that disappear as each prerequisite is completed;
-- visible verification URL and copyable localized recipient instructions after recording;
+- visible private handoff URL and copyable localized recipient instructions after recording;
 - a clear-and-restart verification JSON control that returns to the JSON picker on the Verify entry page, plus detailed match results;
 - automatic Base Sepolia/Base Mainnet wallet network switching;
 - live connector-chain revalidation before every Registry write, with an explicit switch action when the wallet and selected network differ;
@@ -87,7 +98,12 @@ Available:
 - salted SHA-256 commitments calculated in a browser worker;
 - wallet-confirmed Base Sepolia Registry transactions; BaseStamp does not configure a paymaster, while a wallet may sponsor fees under its own policy;
 - automatic verification-package download;
-- sender-to-recipient JSON handoff;
+- private fragment handoff URLs with explicit copy, Web Share, and local QR;
+- local recipient comparison with no file or salt upload;
+- one-time, wallet-bound EIP-712 acknowledgement challenges after a UI match;
+- locally downloaded strict Handoff Receipt JSON with EOA, ERC-1271, and
+  allowlisted Base Account ERC-6492 verification;
+- classic sender-to-recipient JSON handoff;
 - wallet-free recipient verification;
 - strict package parsing and pinned Registry/RPC verification.
 
@@ -97,6 +113,7 @@ Not available yet:
 - BaseStamp-configured sponsored transactions;
 - x402;
 - server-side file or verification-package storage;
+- a public Handoff Receipt timeline or searchable Receipt index;
 - a public stamp directory.
 
 ## Base Sepolia Registry
@@ -217,8 +234,10 @@ from request `Host` or `Origin` headers.
 - Onchain records are public and cannot be deleted.
 - Do not place personal information or confidential text in public metadata.
 - Losing the verification JSON prevents local comparison because its salt
-  cannot be reconstructed from the onchain record.
+  cannot be reconstructed from the onchain record unless the private handoff
+  link is still available.
+- Anyone with a private handoff link can test candidate files against its public
+  commitment; do not publish or forward it casually.
 - Treat every imported verification package as untrusted input.
 - BaseStamp is not a notary, identity provider, copyright registry, or legal
   service.
-

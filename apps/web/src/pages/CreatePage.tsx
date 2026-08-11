@@ -13,6 +13,7 @@ import { useI18n, type MessageKey } from "../i18n-context";
 import { localeTag } from "../locale";
 import { FilePreview } from "../components/FilePreview";
 import { HandoffStory } from "../components/HandoffStory";
+import { QrCode } from "../components/QrCode";
 import { getCreateWalletState } from "../create-wallet-state";
 import { getCreateHandoffStep } from "../handoff-role";
 import { calculateFileCommitment } from "../lib/commitment-worker";
@@ -22,6 +23,7 @@ import {
   randomBytes32
 } from "../lib/crypto";
 import { BASE_SEPOLIA_DEPLOYMENT } from "../lib/deployment";
+import { createHandoffUrl } from "../lib/handoff";
 import {
   cacheCreatedVerificationPackage,
   readLatestCreatedVerificationPackage
@@ -129,6 +131,7 @@ export function CreatePage({
     useState<PendingConfirmation>();
   const [status, setStatus] = useState(t("create.status.chooseFile"));
   const [busy, setBusy] = useState(false);
+  const [showShareQr, setShowShareQr] = useState(false);
   const { mutateAsync: writeContractAsync } = useWriteContract();
   const selectedNetwork = getBaseNetwork(selectedChainId);
   const registryAvailable = selectedChainId === 84532;
@@ -158,10 +161,18 @@ export function CreatePage({
   );
   const readyToRecord = walletState === "ready";
 
+  const handoffUrl =
+    package_ === undefined
+      ? ""
+      : createHandoffUrl(
+          window.location.origin,
+          package_.stampId,
+          package_.commitment.contentSalt
+        );
   const shareMessage =
     package_ === undefined
       ? ""
-      : t("create.shareMessage", { url: package_.verificationUrl });
+      : t("create.shareMessage", { url: handoffUrl });
 
   async function switchToSelectedNetwork(): Promise<void> {
     setBusy(true);
@@ -194,6 +205,33 @@ export function CreatePage({
       setStatus(t(successKey));
     } catch {
       setStatus(t(failureKey));
+    }
+  }
+
+  async function shareHandoff(): Promise<void> {
+    if (handoffUrl === "") return;
+    const share = Reflect.get(navigator, "share");
+    if (typeof share !== "function") {
+      await copyText(
+        handoffUrl,
+        "create.status.linkCopied",
+        "create.status.linkCopyFailed"
+      );
+      return;
+    }
+    try {
+      await Reflect.apply(share, navigator, [{
+        title: "BaseStamp",
+        text: t("create.shareText"),
+        url: handoffUrl
+      }]);
+      setStatus(t("create.status.shared"));
+    } catch (error) {
+      setStatus(
+        error instanceof DOMException && error.name === "AbortError"
+          ? t("create.status.shareCancelled")
+          : t("create.status.shareFailed")
+      );
     }
   }
 
@@ -733,16 +771,17 @@ export function CreatePage({
               </button>
               <div className="share-panel">
                 <h3>{t("create.shareTitle")}</h3>
+                <p className="share-warning">{t("create.shareWarning")}</p>
                 <span className="share-label">
-                  {t("create.verificationUrl")}
+                  {t("create.handoffUrl")}
                 </span>
                 <div className="share-url-row">
                   <a
-                    href={package_.verificationUrl}
+                    href={handoffUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                   >
-                    {package_.verificationUrl}
+                    {handoffUrl}
                   </a>
                   <button
                     type="button"
@@ -751,7 +790,7 @@ export function CreatePage({
                     title={t("create.copyUrl")}
                     onClick={() =>
                       void copyText(
-                        package_.verificationUrl,
+                        handoffUrl,
                         "create.status.linkCopied",
                         "create.status.linkCopyFailed"
                       )
@@ -780,6 +819,34 @@ export function CreatePage({
                 >
                   {t("create.copyShareMessage")}
                 </button>
+                <div className="handoff-share-actions">
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={() => void shareHandoff()}
+                  >
+                    {t("create.webShare")}
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={() => {
+                      setShowShareQr((value) => !value);
+                    }}
+                    aria-expanded={showShareQr}
+                  >
+                    {t(showShareQr ? "create.hideQr" : "create.showQr")}
+                  </button>
+                </div>
+                {showShareQr && (
+                  <div className="handoff-qr-panel">
+                    <QrCode
+                      value={handoffUrl}
+                      label={t("create.qrLabel")}
+                    />
+                    <p>{t("create.qrWarning")}</p>
+                  </div>
+                )}
               </div>
               <a
                 href={"/stamps/" + package_.stampId}

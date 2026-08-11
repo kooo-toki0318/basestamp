@@ -21,7 +21,9 @@ export function VerifyStartPage() {
       document.getElementById("verify-json")?.scrollIntoView({ block: "center" });
     });
 
-    return () => window.cancelAnimationFrame(frame);
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
   }, []);
 
   async function beginVerification(packageFile: File | undefined): Promise<void> {

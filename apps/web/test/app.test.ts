@@ -9,7 +9,7 @@ const configuredEnv = {
   SIWE_ALLOWED_ORIGIN: "http://localhost:5173",
   SIWE_CHAIN_IDS: "84532,8453",
   SESSION_HASH_SECRET: "x".repeat(32)
-} as Bindings;
+} as unknown as Bindings;
 
 describe("Core Worker surface", () => {
   it("serves a no-store health response with security headers", async () => {
@@ -18,11 +18,38 @@ describe("Core Worker surface", () => {
     await expect(response.json()).resolves.toEqual({
       ok: true,
       service: "basestamp-core",
-      milestone: "2a"
+      milestone: "2b"
     });
     expect(response.headers.get("cache-control")).toBe("no-store");
     expect(response.headers.get("x-content-type-options")).toBe("nosniff");
     expect(response.headers.get("x-frame-options")).toBe("DENY");
+  });
+
+  it("requires an authenticated session before issuing a handoff challenge", async () => {
+    const response = await createCoreApp({
+      readHandoffStamp: () => Promise.resolve({
+        contentCommitment:
+          "0x1111111111111111111111111111111111111111111111111111111111111111"
+      })
+    }).request(
+      "/api/handoff/challenge",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Origin: "http://localhost:5173"
+        },
+        body: JSON.stringify({
+          stampId:
+            "0x2222222222222222222222222222222222222222222222222222222222222222"
+        })
+      },
+      configuredEnv
+    );
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "authentication_required" }
+    });
   });
 
   it("has no file upload endpoint", async () => {

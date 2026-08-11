@@ -1,3 +1,5 @@
+import type { Hex } from "viem";
+
 const encoder = new TextEncoder();
 
 function toHex(bytes: Uint8Array): string {
@@ -22,6 +24,14 @@ export async function hmacSha256Hex(
   );
   const digest = await crypto.subtle.sign("HMAC", key, encoder.encode(value));
   return toHex(new Uint8Array(digest));
+}
+
+export function randomHex32(): Hex {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  return (
+    "0x" +
+    Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("")
+  ) as Hex;
 }
 
 export function randomToken(byteLength = 32): string {
