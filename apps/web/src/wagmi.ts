@@ -11,7 +11,10 @@ const builderCode = import.meta.env.VITE_BASE_BUILDER_CODE?.trim() ?? "";
 const dataSuffix =
   builderCode === ""
     ? undefined
-    : Attribution.toDataSuffix({ codes: [builderCode] });
+    : {
+        required: true,
+        value: Attribution.toDataSuffix({ codes: [builderCode] })
+      };
 
 export const wagmiConfig = createConfig({
   chains: [base, baseSepolia],

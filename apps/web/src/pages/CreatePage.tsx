@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   bytesToHex,
   getAddress,
@@ -6,15 +6,17 @@ import {
   type Address,
   type Hex
 } from "viem";
-import { useWriteContract } from "wagmi";
+import { useSendCalls, useWriteContract } from "wagmi";
 import type { Session } from "../auth-types";
 import { useI18n, type MessageKey } from "../i18n-context";
 import { localeTag } from "../locale";
 import { FilePreview } from "../components/FilePreview";
 import { HandoffStory } from "../components/HandoffStory";
 import { QrCode } from "../components/QrCode";
+import { TurnstileWidget } from "../components/TurnstileWidget";
 import {
   getCreateConfirmationState,
+  getCreateFundingMode,
   getCreateWalletState
 } from "../create-wallet-state";
 import { getCreateHandoffStep } from "../handoff-role";
@@ -45,6 +47,16 @@ import {
 import { baseSepoliaPublicClient } from "../lib/onchain";
 import { deriveStampId, registryAbi } from "../lib/registry";
 import {
+  createSponsorIdempotencyKey,
+  type SponsorGrantResponse
+} from "../lib/sponsor";
+import {
+  readSponsorshipEnabled,
+  readTurnstileSiteKey,
+  requestSponsorGrant
+} from "../sponsor-client";
+import { createSponsoredStampCall } from "../sponsored-stamp";
+import {
   formatUnixSeconds,
   serializeVerificationPackage,
   parseVerificationPackage,
@@ -65,7 +77,8 @@ type PendingConfirmation = {
   expectedStampId: Hex;
   prepared: PreparedStamp;
   searchFromBlock: bigint;
-  submittedHash: Hex;
+  submittedHash?: Hex;
+  submittedReference: string;
 };
 
 const CONFIRMATION_WINDOW_MS = 5 * 60 * 1000;
@@ -81,6 +94,7 @@ type ConfirmedRegistryRecord = {
 
 type CreatePageProperties = {
   address: Address | undefined;
+  connectorId: string | undefined;
   walletChainId: number | undefined;
   selectedChainId: SupportedChainId;
   session: Session;
@@ -188,6 +202,7 @@ async function waitForAutomaticConfirmation(
 
 export function CreatePage({
   address,
+  connectorId,
   walletChainId,
   selectedChainId,
   session,
@@ -211,9 +226,20 @@ export function CreatePage({
   const [status, setStatus] = useState(t("create.status.chooseFile"));
   const [busy, setBusy] = useState(false);
   const [showShareQr, setShowShareQr] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState<string>();
+  const [turnstileResetKey, setTurnstileResetKey] = useState(0);
+  const [sponsorGrant, setSponsorGrant] = useState<SponsorGrantResponse>();
+  const [sponsorFailure, setSponsorFailure] = useState<string>();
+  const [walletFeeChosen, setWalletFeeChosen] = useState(false);
+  const [sponsorIdempotencyKey, setSponsorIdempotencyKey] = useState(
+    createSponsorIdempotencyKey
+  );
   const { mutateAsync: writeContractAsync } = useWriteContract();
+  const { mutateAsync: sendCallsAsync } = useSendCalls();
   const selectedNetwork = getBaseNetwork(selectedChainId);
   const registryAvailable = selectedChainId === 84532;
+  const turnstileSiteKey = readTurnstileSiteKey();
+  const sponsorshipEnabled = readSponsorshipEnabled();
   useEffect(() => {
     const source = readLatestCreatedVerificationPackage();
     if (source === undefined) return;
@@ -239,6 +265,15 @@ export function CreatePage({
     authenticatedAddress
   );
   const readyToRecord = walletState === "ready";
+  const sponsorshipAvailable =
+    sponsorshipEnabled &&
+    registryAvailable &&
+    connectorId === "baseAccount" &&
+    turnstileSiteKey !== undefined;
+  const fundingMode = getCreateFundingMode(
+    sponsorshipAvailable,
+    walletFeeChosen
+  );
   const confirmationState = getCreateConfirmationState(
     pendingConfirmation !== undefined,
     busy
@@ -258,6 +293,28 @@ export function CreatePage({
       : t("create.shareMessage", { url: handoffUrl });
   const webShareAvailable =
     typeof Reflect.get(navigator, "share") === "function";
+
+  const handleTurnstileTokenChange = useCallback(
+    (token: string | undefined) => {
+      setTurnstileToken(token);
+      if (token !== undefined) setSponsorFailure(undefined);
+    },
+    []
+  );
+  const handleTurnstileError = useCallback(() => {
+    const message = t("create.status.turnstileFailed");
+    setSponsorFailure(message);
+    setStatus(message);
+  }, [t]);
+
+  function resetSponsorAttempt(): void {
+    setTurnstileToken(undefined);
+    setSponsorGrant(undefined);
+    setSponsorFailure(undefined);
+    setWalletFeeChosen(false);
+    setSponsorIdempotencyKey(createSponsorIdempotencyKey());
+    setTurnstileResetKey((value) => value + 1);
+  }
 
   async function switchToSelectedNetwork(): Promise<void> {
     setBusy(true);
@@ -321,6 +378,7 @@ export function CreatePage({
   }
 
   function chooseFile(nextFile: File | undefined): void {
+    resetSponsorAttempt();
     setPrepared(undefined);
     setPackage(undefined);
     if (nextFile === undefined) {
@@ -427,26 +485,60 @@ export function CreatePage({
         });
         const searchFromBlock = await baseSepoliaPublicClient.getBlockNumber();
 
-        setStatus(t("create.status.approveTransaction"));
-        const submittedHash = await writeContractAsync({
-          address: BASE_SEPOLIA_DEPLOYMENT.registryAddress,
-          abi: registryAbi,
-          functionName: "createStamp",
-          args: [
-            prepared.contentCommitment,
-            prepared.metadataHash,
-            stampNonceHex
-          ],
-          account: address,
-          chainId: BASE_SEPOLIA_DEPLOYMENT.chainId
-        });
+        let submittedHash: Hex | undefined;
+        let submittedReference: string;
+        if (fundingMode === "sponsored") {
+          let activeGrant = sponsorGrant;
+          if (activeGrant === undefined) {
+            if (turnstileToken === undefined) {
+              throw new Error(t("create.status.turnstileRequired"));
+            }
+            setStatus(t("create.status.requestingSponsor"));
+            activeGrant = await requestSponsorGrant(
+              {
+                chainId: BASE_SEPOLIA_DEPLOYMENT.chainId,
+                idempotencyKey: sponsorIdempotencyKey,
+                turnstileToken
+              },
+              t
+            );
+            setSponsorGrant(activeGrant);
+          }
+
+          setStatus(t("create.status.approveSponsoredTransaction"));
+          const submittedCalls = await sendCallsAsync(createSponsoredStampCall({
+            account: address,
+            contentCommitment: prepared.contentCommitment,
+            grant: activeGrant,
+            metadataHash: prepared.metadataHash,
+            origin: window.location.origin,
+            stampNonce: stampNonceHex
+          }));
+          submittedReference = submittedCalls.id;
+        } else {
+          setStatus(t("create.status.approveTransaction"));
+          submittedHash = await writeContractAsync({
+            address: BASE_SEPOLIA_DEPLOYMENT.registryAddress,
+            abi: registryAbi,
+            functionName: "createStamp",
+            args: [
+              prepared.contentCommitment,
+              prepared.metadataHash,
+              stampNonceHex
+            ],
+            account: address,
+            chainId: BASE_SEPOLIA_DEPLOYMENT.chainId
+          });
+          submittedReference = submittedHash;
+        }
 
         activeConfirmation = {
           creator: address,
           expectedStampId,
           prepared,
           searchFromBlock,
-          submittedHash
+          submittedHash,
+          submittedReference
         };
         setPendingConfirmation(activeConfirmation);
       }
@@ -494,12 +586,13 @@ export function CreatePage({
       cacheCreatedVerificationPackage(nextPackage);
       downloadPackage(nextPackage);
       setPendingConfirmation(undefined);
+      resetSponsorAttempt();
       setStatus(t("create.status.recorded"));
     } catch (error) {
       if (activeConfirmation !== undefined) {
         setStatus(
           t("create.status.confirmationRetry", {
-            transaction: shortHex(activeConfirmation.submittedHash)
+            transaction: shortHex(activeConfirmation.submittedReference)
           })
         );
       } else {
@@ -507,7 +600,14 @@ export function CreatePage({
           error instanceof Error
             ? (error.message.split("\n", 1)[0] ?? t("create.status.recordingFailed"))
             : t("create.status.recordingFailed");
-        setStatus(message);
+        const displayedMessage =
+          fundingMode === "sponsored"
+            ? t("create.status.sponsorFailed", { message })
+            : message;
+        if (fundingMode === "sponsored") {
+          setSponsorFailure(displayedMessage);
+        }
+        setStatus(displayedMessage);
       }
     } finally {
       setBusy(false);
@@ -794,18 +894,82 @@ export function CreatePage({
                       </div>
                     </div>
                   )}
-                  <a
-                    href={
-                      "https://sepolia.basescan.org/tx/" +
-                      pendingConfirmation.submittedHash
-                    }
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    {t("create.viewTransaction")}
-                  </a>
+                  {pendingConfirmation.submittedHash !== undefined && (
+                    <a
+                      href={
+                        "https://sepolia.basescan.org/tx/" +
+                        pendingConfirmation.submittedHash
+                      }
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      {t("create.viewTransaction")}
+                    </a>
+                  )}
                 </>
               )}
+              {sponsorshipAvailable &&
+                pendingConfirmation === undefined &&
+                prepared !== undefined &&
+                readyToRecord && (
+                  <div className="sponsor-choice">
+                    <div>
+                      <strong>{t("create.sponsorTitle")}</strong>
+                      <p>{t("create.sponsorIntro")}</p>
+                    </div>
+                    {fundingMode === "sponsored" ? (
+                      <>
+                        {sponsorGrant === undefined ? (
+                          <TurnstileWidget
+                            accessibleLabel={t("create.sponsorCheckLabel")}
+                            onError={handleTurnstileError}
+                            onTokenChange={handleTurnstileTokenChange}
+                            resetKey={turnstileResetKey}
+                            siteKey={turnstileSiteKey}
+                          />
+                        ) : (
+                          <p className="sponsor-ready" role="status">
+                            {t("create.sponsorReady")}
+                          </p>
+                        )}
+                        {sponsorFailure !== undefined && (
+                          <p className="sponsor-error" role="alert">
+                            {sponsorFailure}
+                          </p>
+                        )}
+                        <button
+                          type="button"
+                          className="secondary sponsor-choice-action"
+                          onClick={() => {
+                            setWalletFeeChosen(true);
+                            setStatus(t("create.status.walletFeeSelected"));
+                          }}
+                          disabled={busy}
+                        >
+                          {t("create.useWalletFee")}
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <p className="sponsor-wallet-paid">
+                          {t("create.walletFeeSelected")}
+                        </p>
+                        <button
+                          type="button"
+                          className="secondary sponsor-choice-action"
+                          onClick={() => {
+                            setWalletFeeChosen(false);
+                            setSponsorFailure(undefined);
+                            setStatus(t("create.status.sponsorSelected"));
+                          }}
+                          disabled={busy}
+                        >
+                          {t("create.trySponsor")}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
               <button
                 type="button"
                 className={
@@ -819,11 +983,19 @@ export function CreatePage({
                   (pendingConfirmation === undefined &&
                     (prepared === undefined ||
                       !readyToRecord ||
-                      !registryAvailable))
+                      !registryAvailable ||
+                      (fundingMode === "sponsored" &&
+                        sponsorGrant === undefined &&
+                        turnstileToken === undefined)))
                 }
               >
                 {confirmationState === "idle"
-                  ? t("create.recordOn", { network: selectedNetwork.name })
+                  ? t(
+                      fundingMode === "sponsored"
+                        ? "create.recordSponsored"
+                        : "create.recordOn",
+                      { network: selectedNetwork.name }
+                    )
                   : confirmationState === "confirming"
                     ? (
                         <span className="confirmation-button-content">
@@ -838,7 +1010,12 @@ export function CreatePage({
               </button>
               <p className="muted">
                 {registryAvailable
-                  ? t("create.feeNotice", { network: selectedNetwork.name })
+                  ? t(
+                      fundingMode === "sponsored"
+                        ? "create.sponsorFeeNotice"
+                        : "create.feeNotice",
+                      { network: selectedNetwork.name }
+                    )
                   : t("create.noMainnetTransaction")}
               </p>
             </>

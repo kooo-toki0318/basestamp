@@ -81,7 +81,8 @@ Receipt meaning and signature allowlist.
 
 The manual [Turnstile setup guide](docs/turnstile.md) documents the separate
 public Site Key and Worker Secret Key used by the disabled-by-default
-sponsorship gate.
+sponsorship gate. Both the public build flag and Worker flag fail closed by
+default.
 
 ## Current release
 
@@ -100,7 +101,8 @@ Available:
 - live connector-chain revalidation before every Registry write, with an explicit switch action when the wallet and selected network differ;
 - local previews for common image, video, audio, PDF, and text formats;
 - salted SHA-256 commitments calculated in a browser worker;
-- wallet-confirmed Base Sepolia Registry transactions; BaseStamp does not configure a paymaster, while a wallet may sponsor fees under its own policy;
+- wallet-confirmed Base Sepolia Registry transactions, including a disabled-by-default Base Account sponsorship path with an explicit wallet-paid alternative;
+- Turnstile-gated, wallet-bound sponsorship grants and a Worker Paymaster proxy with strict UserOperation validation, D1 quotas, and retention cleanup;
 - automatic verification-package download;
 - private fragment handoff URLs with explicit copy, Web Share, and local QR;
 - local recipient comparison with no file or salt upload;
@@ -114,7 +116,7 @@ Available:
 Not available yet:
 
 - Base Mainnet recording;
-- BaseStamp-configured sponsored transactions;
+- production-enabled BaseStamp sponsorship (the code remains fail-closed until Dashboard resources, secrets, migrations, and the release gate are complete);
 - x402;
 - server-side file or verification-package storage;
 - a public Handoff Receipt timeline or searchable Receipt index;

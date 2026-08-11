@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   getCreateConfirmationState,
+  getCreateFundingMode,
   getCreateWalletState
 } from "../src/create-wallet-state";
 
@@ -30,5 +31,17 @@ describe("Create transaction confirmation", () => {
   it("offers retry only after automatic confirmation has stopped", () => {
     expect(getCreateConfirmationState(true, false)).toBe("retry");
     expect(getCreateConfirmationState(false, true)).toBe("idle");
+  });
+});
+
+describe("Create transaction funding", () => {
+  it("uses sponsorship only when it is available", () => {
+    expect(getCreateFundingMode(true, false)).toBe("sponsored");
+    expect(getCreateFundingMode(false, false)).toBe("wallet-paid");
+  });
+
+  it("switches to wallet-paid only after an explicit choice", () => {
+    expect(getCreateFundingMode(true, false)).toBe("sponsored");
+    expect(getCreateFundingMode(true, true)).toBe("wallet-paid");
   });
 });

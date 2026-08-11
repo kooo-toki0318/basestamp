@@ -30,6 +30,7 @@ await writeIfMissing(
     "# Public browser configuration for local development.",
     "VITE_APP_URL=http://localhost:5173",
     "VITE_BASE_BUILDER_CODE=",
+    "VITE_SPONSOR_ENABLED=false",
     "VITE_TURNSTILE_SITE_KEY=",
     ""
   ].join("\n")

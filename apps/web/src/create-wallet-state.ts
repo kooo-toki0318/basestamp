@@ -6,6 +6,8 @@ export type CreateWalletState =
 
 export type CreateConfirmationState = "idle" | "confirming" | "retry";
 
+export type CreateFundingMode = "sponsored" | "wallet-paid";
+
 export function getCreateWalletState(
   connected: boolean,
   walletChainId: number | undefined,
@@ -23,4 +25,13 @@ export function getCreateConfirmationState(
 ): CreateConfirmationState {
   if (!hasPendingConfirmation) return "idle";
   return busy ? "confirming" : "retry";
+}
+
+export function getCreateFundingMode(
+  sponsorshipAvailable: boolean,
+  walletFeeChosen: boolean
+): CreateFundingMode {
+  return sponsorshipAvailable && !walletFeeChosen
+    ? "sponsored"
+    : "wallet-paid";
 }

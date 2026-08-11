@@ -435,7 +435,9 @@ export function App() {
   } else if (path === "/create" || path === "/create/") {
     page = (
       <CreatePage
+        key={`${activeConnector?.id ?? "disconnected"}:${address ?? ""}`}
         address={address}
+        connectorId={activeConnector?.id}
         walletChainId={walletChainId}
         selectedChainId={selectedChainId}
         session={session}

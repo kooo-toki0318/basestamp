@@ -4,6 +4,7 @@
 interface ImportMetaEnv {
   readonly VITE_APP_URL?: string;
   readonly VITE_BASE_BUILDER_CODE?: string;
+  readonly VITE_SPONSOR_ENABLED?: string;
   readonly VITE_TURNSTILE_SITE_KEY?: string;
 }
 

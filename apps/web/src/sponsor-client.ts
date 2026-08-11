@@ -31,3 +31,7 @@ export function readTurnstileSiteKey(): string | undefined {
   const siteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY?.trim() ?? "";
   return siteKey === "" ? undefined : siteKey;
 }
+
+export function readSponsorshipEnabled(): boolean {
+  return import.meta.env.VITE_SPONSOR_ENABLED === "true";
+}
