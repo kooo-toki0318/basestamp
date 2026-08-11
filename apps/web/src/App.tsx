@@ -114,7 +114,10 @@ export function App() {
   const connectors = useConnectors();
   const { mutateAsync: connectAsync } = useConnect();
   const { mutate: disconnect } = useDisconnect();
-  const { mutateAsync: switchChainAsync } = useSwitchChain();
+  const {
+    mutateAsync: switchChainAsync,
+    isPending: networkBusy
+  } = useSwitchChain();
   const [session, setSession] = useState<Session>({ authenticated: false });
   const [authFeedback, setAuthFeedback] = useState<AuthFeedback>({
     message: "",
@@ -132,37 +135,36 @@ export function App() {
     []
   );
 
-  useEffect(() => {
-    void fetch("/api/session", { credentials: "include" })
-      .then((response) => parseJsonResponse<Session>(response, t))
-      .then(setSession)
-      .catch(() => {
-        setSession({ authenticated: false });
-      });
-  }, [t]);
-
-  useEffect(() => {
-    if (
-      address === undefined ||
-      walletChainId === undefined ||
-      walletChainId === selectedChainId
-    ) {
-      lastAutoSwitch.current = undefined;
-      return;
-    }
-
-    const attemptKey =
-      `${address}:${String(walletChainId)}:${String(selectedChainId)}`;
-    if (lastAutoSwitch.current === attemptKey) return;
-    lastAutoSwitch.current = attemptKey;
-
-    void Promise.resolve().then(async () => {
-      showAuthStatus(
-        t("auth.switching", { network: selectedNetwork.name }),
-        "pending"
-      );
+  const ensureSelectedNetwork = useCallback(
+    async (connector: Connector | undefined = activeConnector) => {
+      if (connector === undefined) {
+        throw new Error(t("auth.providerUnavailable"));
+      }
       try {
-        await switchChainAsync({ chainId: selectedChainId });
+        const currentChainId = await connector.getChainId();
+        if (currentChainId === selectedChainId) return;
+
+        showAuthStatus(
+          t("auth.switching", { network: selectedNetwork.name }),
+          "pending"
+        );
+        const switchedChain = await switchChainAsync({
+          chainId: selectedChainId,
+          connector
+        });
+        const confirmedChainId = await connector.getChainId();
+        if (
+          switchedChain.id !== selectedChainId ||
+          confirmedChainId !== selectedChainId
+        ) {
+          throw new Error(
+            t("auth.switchIncomplete", {
+              chainId: confirmedChainId,
+              network: selectedNetwork.name
+            })
+          );
+        }
+
         const signInAgain =
           session.authenticated && session.chainId !== selectedChainId
             ? t("auth.switchAgain")
@@ -177,20 +179,60 @@ export function App() {
       } catch (error) {
         showAuthStatus(
           error instanceof Error
-            ? t("auth.autoSwitchFailed", { message: error.message })
+            ? t("auth.switchFailed", {
+                message: error.message,
+                network: selectedNetwork.name
+              })
             : t("auth.autoSwitchFailedFallback"),
           "error"
         );
+        throw error;
       }
+    },
+    [
+      activeConnector,
+      selectedChainId,
+      selectedNetwork.name,
+      session,
+      showAuthStatus,
+      switchChainAsync,
+      t
+    ]
+  );
+
+  useEffect(() => {
+    void fetch("/api/session", { credentials: "include" })
+      .then((response) => parseJsonResponse<Session>(response, t))
+      .then(setSession)
+      .catch(() => {
+        setSession({ authenticated: false });
+      });
+  }, [t]);
+
+  useEffect(() => {
+    if (
+      address === undefined ||
+      activeConnector === undefined ||
+      walletChainId === undefined ||
+      walletChainId === selectedChainId
+    ) {
+      lastAutoSwitch.current = undefined;
+      return;
+    }
+
+    const attemptKey =
+      `${address}:${String(walletChainId)}:${String(selectedChainId)}`;
+    if (lastAutoSwitch.current === attemptKey) return;
+    lastAutoSwitch.current = attemptKey;
+
+    void ensureSelectedNetwork().catch(() => {
+      // The prominent authentication status already explains the failure.
     });
   }, [
+    activeConnector,
     address,
+    ensureSelectedNetwork,
     selectedChainId,
-    selectedNetwork.name,
-    session,
-    showAuthStatus,
-    switchChainAsync,
-    t,
     walletChainId
   ]);
 
@@ -311,11 +353,7 @@ export function App() {
       if (connectedChainId !== selectedChainId) {
         lastAutoSwitch.current =
           `${account}:${String(connectedChainId)}:${String(selectedChainId)}`;
-        showAuthStatus(
-          t("auth.switching", { network: selectedNetwork.name }),
-          "pending"
-        );
-        await switchChainAsync({ chainId: selectedChainId });
+        await ensureSelectedNetwork(connector);
       }
 
       if (signedMessage === undefined) {
@@ -403,10 +441,12 @@ export function App() {
   const injectedConnector = connectors.find(
     (connector) => connector.id !== "baseAccount"
   );
+  const walletChainMatchesSelection = walletChainId === selectedChainId;
   const authenticatedConnection =
     session.authenticated &&
     session.walletAddress.toLowerCase() === address?.toLowerCase() &&
-    session.chainId === selectedChainId;
+    session.chainId === selectedChainId &&
+    walletChainMatchesSelection;
   const displayedAuthStatus =
     authFeedback.message === "" ? t("auth.ready") : authFeedback.message;
   const stampId = currentStampId();
@@ -419,9 +459,10 @@ export function App() {
     page = (
       <CreatePage
         address={address}
+        walletChainId={walletChainId}
         selectedChainId={selectedChainId}
         session={session}
-        authBusy={authBusy}
+        authBusy={authBusy || networkBusy}
         baseSignInAvailable={baseConnector !== undefined}
         browserSignInAvailable={injectedConnector !== undefined}
         onSignInBase={() => {
@@ -433,6 +474,7 @@ export function App() {
         onAuthenticate={() => {
           if (activeConnector !== undefined) void signIn(activeConnector);
         }}
+        onEnsureNetwork={() => ensureSelectedNetwork()}
       />
     );
   } else if (path === "/verify" || path === "/verify/") {
@@ -473,7 +515,22 @@ export function App() {
         <div className="auth-area">
           {address !== undefined ? (
             <>
-              {!authenticatedConnection && activeConnector !== undefined && (
+              {!walletChainMatchesSelection &&
+              walletChainId !== undefined &&
+              activeConnector !== undefined ? (
+                <button
+                  className="compact"
+                  type="button"
+                  onClick={() => {
+                    void ensureSelectedNetwork().catch(() => {
+                      // The prominent authentication status explains the failure.
+                    });
+                  }}
+                  disabled={authBusy || networkBusy}
+                >
+                  {t("auth.switchTo", { network: selectedNetwork.name })}
+                </button>
+              ) : !authenticatedConnection && activeConnector !== undefined ? (
                 <button
                   className={
                     authFeedback.tone === "error"
@@ -482,7 +539,7 @@ export function App() {
                   }
                   type="button"
                   onClick={() => void signIn(activeConnector)}
-                  disabled={authBusy}
+                  disabled={authBusy || networkBusy}
                 >
                   {t(
                     authFeedback.tone === "error"
@@ -490,7 +547,7 @@ export function App() {
                       : "auth.authenticate"
                   )}
                 </button>
-              )}
+              ) : null}
               <div
                 className="wallet-identity"
                 title={
@@ -506,7 +563,7 @@ export function App() {
                   className="icon-button"
                   type="button"
                   onClick={() => void copyAddress()}
-                  disabled={authBusy}
+                  disabled={authBusy || networkBusy}
                   aria-label={t("auth.copyAddress")}
                   title={t("auth.copyAddress")}
                 >
@@ -520,7 +577,7 @@ export function App() {
                 className="compact secondary"
                 type="button"
                 onClick={() => void disconnectWallet()}
-                disabled={authBusy}
+                disabled={authBusy || networkBusy}
               >
                 {t("auth.disconnect")}
               </button>
@@ -533,7 +590,7 @@ export function App() {
                 onClick={() =>
                   baseConnector && void signIn(baseConnector)
                 }
-                disabled={authBusy || baseConnector === undefined}
+                disabled={authBusy || networkBusy || baseConnector === undefined}
               >
                 {t("auth.signInBase")}
               </button>
@@ -542,7 +599,7 @@ export function App() {
                   className="compact secondary"
                   type="button"
                   onClick={() => void signIn(injectedConnector)}
-                  disabled={authBusy}
+                  disabled={authBusy || networkBusy}
                 >
                   {t("auth.browserWallet")}
                 </button>
@@ -576,7 +633,7 @@ export function App() {
                   onChange={(event) => {
                     selectNetwork(Number(event.target.value));
                   }}
-                  disabled={authBusy}
+                  disabled={authBusy || networkBusy}
                 >
                   {BASE_NETWORKS.map((network) => (
                     <option key={network.chainId} value={network.chainId}>

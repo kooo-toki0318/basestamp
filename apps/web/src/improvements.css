@@ -289,6 +289,20 @@ input:focus-visible {
   background: #3c7ba7;
 }
 
+.authentication-prompt.network-prompt {
+  border-color: rgb(151 104 38 / 32%);
+  border-left-color: #a87836;
+  background: rgb(255 247 222 / 72%);
+}
+
+.network-prompt .authentication-prompt-icon {
+  background: #a87836;
+}
+
+.network-prompt .authentication-prompt-kicker {
+  color: #704b18;
+}
+
 .authentication-prompt-kicker {
   margin: 0 0 3px;
   color: #315a78;

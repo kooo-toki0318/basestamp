@@ -13,6 +13,7 @@ import { useI18n, type MessageKey } from "../i18n-context";
 import { localeTag } from "../locale";
 import { FilePreview } from "../components/FilePreview";
 import { HandoffStory } from "../components/HandoffStory";
+import { getCreateWalletState } from "../create-wallet-state";
 import { getCreateHandoffStep } from "../handoff-role";
 import { calculateFileCommitment } from "../lib/commitment-worker";
 import {
@@ -64,6 +65,7 @@ type PendingConfirmation = {
 
 type CreatePageProperties = {
   address: Address | undefined;
+  walletChainId: number | undefined;
   selectedChainId: SupportedChainId;
   session: Session;
   authBusy: boolean;
@@ -72,6 +74,7 @@ type CreatePageProperties = {
   onSignInBase: () => void;
   onSignInBrowser: () => void;
   onAuthenticate: () => void;
+  onEnsureNetwork: () => Promise<void>;
 };
 
 const PURPOSE_LABEL_KEYS = {
@@ -104,6 +107,7 @@ function downloadPackage(package_: VerificationPackage): void {
 
 export function CreatePage({
   address,
+  walletChainId,
   selectedChainId,
   session,
   authBusy,
@@ -111,7 +115,8 @@ export function CreatePage({
   browserSignInAvailable,
   onSignInBase,
   onSignInBrowser,
-  onAuthenticate
+  onAuthenticate,
+  onEnsureNetwork
 }: CreatePageProperties) {
   const { locale, t } = useI18n();
   const [file, setFile] = useState<File>();
@@ -145,11 +150,39 @@ export function CreatePage({
       ? isAddressEqual(getAddress(session.walletAddress), address) &&
         session.chainId === selectedChainId
       : false;
+  const walletState = getCreateWalletState(
+    address !== undefined,
+    walletChainId,
+    selectedChainId,
+    authenticatedAddress
+  );
+  const readyToRecord = walletState === "ready";
 
   const shareMessage =
     package_ === undefined
       ? ""
       : t("create.shareMessage", { url: package_.verificationUrl });
+
+  async function switchToSelectedNetwork(): Promise<void> {
+    setBusy(true);
+    setStatus(
+      t("create.status.switchingNetwork", { network: selectedNetwork.name })
+    );
+    try {
+      await onEnsureNetwork();
+      setStatus(
+        t("create.status.networkReady", { network: selectedNetwork.name })
+      );
+    } catch {
+      setStatus(
+        t("create.status.networkSwitchFailed", {
+          network: selectedNetwork.name
+        })
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function copyText(
     value: string,
@@ -244,6 +277,21 @@ export function CreatePage({
       if (activeConfirmation === undefined) {
         if (prepared === undefined || address === undefined) {
           throw new Error(t("create.status.localRecordMissing"));
+        }
+        setStatus(
+          t("create.status.checkingNetwork", {
+            network: selectedNetwork.name
+          })
+        );
+        try {
+          await onEnsureNetwork();
+        } catch {
+          setStatus(
+            t("create.status.networkSwitchFailed", {
+              network: selectedNetwork.name
+            })
+          );
+          return;
         }
         const stampNonceHex = bytesToHex(prepared.stampNonce);
         const expectedStampId = deriveStampId({
@@ -382,7 +430,7 @@ export function CreatePage({
       <HandoffStory
         compact
         activeStep={getCreateHandoffStep(
-          authenticatedAddress,
+          readyToRecord,
           package_ !== undefined
         )}
       />
@@ -440,7 +488,42 @@ export function CreatePage({
         </section>
       )}
 
-      {address !== undefined && !authenticatedAddress && (
+      {walletState === "wrong-network" && (
+        <section
+          className="authentication-prompt network-prompt"
+          aria-labelledby="create-network-heading"
+        >
+          <span className="authentication-prompt-icon" aria-hidden="true">
+            ↔
+          </span>
+          <div>
+            <p className="authentication-prompt-kicker">
+              {t("create.networkStep")}
+            </p>
+            <h2 id="create-network-heading">
+              {t("create.networkTitle", { network: selectedNetwork.name })}
+            </h2>
+            <p>
+              {t("create.networkIntro", {
+                current: walletChainId ?? t("network.notConnected"),
+                network: selectedNetwork.name,
+                target: selectedChainId
+              })}
+            </p>
+          </div>
+          <div className="authentication-prompt-action">
+            <button
+              type="button"
+              onClick={() => void switchToSelectedNetwork()}
+              disabled={busy || authBusy}
+            >
+              {t("auth.switchTo", { network: selectedNetwork.name })}
+            </button>
+          </div>
+        </section>
+      )}
+
+      {address !== undefined && walletState === "authentication-required" && (
         <section
           className="authentication-prompt"
           aria-labelledby="create-authenticate-heading"
@@ -589,8 +672,15 @@ export function CreatePage({
               )}
               {registryAvailable &&
                 pendingConfirmation === undefined &&
-                !authenticatedAddress && (
-                  <p className="muted">{t("create.signInHint")}</p>
+                !readyToRecord && (
+                  <p className="muted">
+                    {t(
+                      walletState === "wrong-network"
+                        ? "create.networkHint"
+                        : "create.signInHint",
+                      { network: selectedNetwork.name }
+                    )}
+                  </p>
                 )}
               {pendingConfirmation !== undefined && (
                 <a
@@ -611,7 +701,7 @@ export function CreatePage({
                   busy ||
                   (pendingConfirmation === undefined &&
                     (prepared === undefined ||
-                      !authenticatedAddress ||
+                      !readyToRecord ||
                       !registryAvailable))
                 }
               >

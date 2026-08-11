@@ -13,5 +13,5 @@
     "noEmit": true,
     "types": ["@cloudflare/workers-types", "vitest"]
   },
-  "include": ["worker", "test", "src/lib", "src/locale.ts", "src/auth-client.ts", "src/locale-negotiation.ts", "src/handoff-role.ts", "src/workers"]
+  "include": ["worker", "test", "src/lib", "src/locale.ts", "src/auth-client.ts", "src/locale-negotiation.ts", "src/handoff-role.ts", "src/create-wallet-state.ts", "src/workers"]
 }

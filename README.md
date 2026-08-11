@@ -82,6 +82,7 @@ Available:
 - visible verification URL and copyable localized recipient instructions after recording;
 - clear/replace verification JSON controls and detailed match results;
 - automatic Base Sepolia/Base Mainnet wallet network switching;
+- live connector-chain revalidation before every Registry write, with an explicit switch action when the wallet and selected network differ;
 - local previews for common image, video, audio, PDF, and text formats;
 - salted SHA-256 commitments calculated in a browser worker;
 - wallet-confirmed Base Sepolia Registry transactions; BaseStamp does not configure a paymaster, while a wallet may sponsor fees under its own policy;
