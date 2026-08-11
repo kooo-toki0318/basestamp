@@ -104,12 +104,9 @@ export function StampPage({ stampId }: StampPageProperties) {
     }
   }
 
-  function clearPackage(): void {
+  function restartVerification(): void {
     removeCachedVerificationPackage(stampId);
-    setPackage(undefined);
-    setFile(undefined);
-    setMatch(undefined);
-    setStatus(t("stamp.status.packageCleared"));
+    window.location.replace("/verify");
   }
 
   async function verifyFile(): Promise<void> {
@@ -219,7 +216,7 @@ export function StampPage({ stampId }: StampPageProperties) {
               <button
                 type="button"
                 className="secondary"
-                onClick={clearPackage}
+                onClick={restartVerification}
                 disabled={busy}
               >
                 {t("stamp.replacePackage")}

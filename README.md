@@ -80,7 +80,7 @@ Available:
 - a shared handoff story on Home, Create, and Verify, with Create progress advancing from authentication to recording and sharing;
 - wallet-connect and authentication prompts on Create that disappear as each prerequisite is completed;
 - visible verification URL and copyable localized recipient instructions after recording;
-- clear/replace verification JSON controls and detailed match results;
+- a clear-and-restart verification JSON control that returns to the Verify entry page, plus detailed match results;
 - automatic Base Sepolia/Base Mainnet wallet network switching;
 - live connector-chain revalidation before every Registry write, with an explicit switch action when the wallet and selected network differ;
 - local previews for common image, video, audio, PDF, and text formats;
