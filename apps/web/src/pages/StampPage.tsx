@@ -106,7 +106,7 @@ export function StampPage({ stampId }: StampPageProperties) {
 
   function restartVerification(): void {
     removeCachedVerificationPackage(stampId);
-    window.location.replace("/verify");
+    window.location.replace("/verify#verify-json");
   }
 
   async function verifyFile(): Promise<void> {

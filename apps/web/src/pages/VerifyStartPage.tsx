@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useI18n } from "../i18n-context";
 import { HandoffStory } from "../components/HandoffStory";
 import { cacheVerificationPackage } from "../local-package";
@@ -11,6 +11,18 @@ export function VerifyStartPage() {
   const { t } = useI18n();
   const [status, setStatus] = useState(t("verifyStart.status.choose"));
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (window.location.hash !== "#verify-json") {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById("verify-json")?.scrollIntoView({ block: "center" });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
 
   async function beginVerification(packageFile: File | undefined): Promise<void> {
     if (packageFile === undefined) return;
@@ -46,7 +58,7 @@ export function VerifyStartPage() {
       <HandoffStory compact activeRole="verify" />
 
       <div className="handoff-grid">
-        <section className="panel">
+        <section id="verify-json" className="panel">
           <span className="step-label">{t("verifyStart.step1")}</span>
           <label className="field">
             <span>{t("verifyStart.fileLabel")}</span>
