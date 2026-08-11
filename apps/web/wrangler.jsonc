@@ -8,11 +8,21 @@
     "not_found_handling": "single-page-application",
     "run_worker_first": ["/api/*"]
   },
+  "vars": {
+    "APP_ENV": "production",
+    "MAINNET_WRITES_ENABLED": "false",
+    "SPONSOR_ENABLED": "false",
+    "X402_TESTNET_ENABLED": "false",
+    "X402_MAINNET_ENABLED": "false",
+    "SIWE_ALLOWED_DOMAIN": "basestamp-web.ndun000.workers.dev",
+    "SIWE_ALLOWED_ORIGIN": "https://basestamp-web.ndun000.workers.dev",
+    "SIWE_CHAIN_IDS": "84532,8453"
+  },
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "basestamp-db",
-      "database_id": "00000000-0000-0000-0000-000000000001",
+      "database_id": "bdcbacfb-27fd-4cdb-a6fd-c09cba864def",
       "migrations_dir": "migrations"
     }
   ],

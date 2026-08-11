@@ -5,6 +5,7 @@ import { createPublicClient, http, isAddress, type Hex } from "viem";
 import { base, baseSepolia } from "viem/chains";
 import { generateSiweNonce, parseSiweMessage } from "viem/siwe";
 import { validateSiweFields } from "./auth-policy";
+import { detectLocaleFromAcceptLanguage } from "../src/locale-negotiation";
 import { hmacSha256Hex, randomToken, sha256Hex } from "./crypto";
 import { ApiError, assertExactKeys, readJsonObject } from "./http";
 import type { AuthConfig, Bindings } from "./types";
@@ -117,6 +118,7 @@ export function createCoreApp(dependencies: Dependencies = {}) {
     dependencies.verifySiweSignature ?? defaultVerifySiweSignature;
   const app = new Hono<{ Bindings: Bindings }>();
 
+
   app.use(
     "/api/*",
     secureHeaders({
@@ -136,6 +138,15 @@ export function createCoreApp(dependencies: Dependencies = {}) {
   app.get("/api/health", (context) =>
     context.json({ ok: true, service: "basestamp-core", milestone: "2a" })
   );
+
+  app.get("/api/locale", (context) => {
+    const locale = detectLocaleFromAcceptLanguage(
+      context.req.header("Accept-Language") ?? null
+    );
+    context.header("Content-Language", locale);
+    context.header("Vary", "Accept-Language");
+    return context.json({ locale });
+  });
 
   app.post("/api/auth/nonce", async (context) => {
     const config = getAuthConfig(context.env);

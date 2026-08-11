@@ -3,7 +3,9 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { WagmiProvider } from "wagmi";
 import { App } from "./App";
+import { I18nProvider } from "./i18n";
 import "./styles.css";
+import "./improvements.css";
 import { queryClient, wagmiConfig } from "./wagmi";
 
 const root = document.getElementById("root");
@@ -11,10 +13,12 @@ if (root === null) throw new Error("Application root is missing.");
 
 createRoot(root).render(
   <StrictMode>
-    <WagmiProvider config={wagmiConfig}>
-      <QueryClientProvider client={queryClient}>
-        <App />
-      </QueryClientProvider>
-    </WagmiProvider>
+    <I18nProvider>
+      <WagmiProvider config={wagmiConfig}>
+        <QueryClientProvider client={queryClient}>
+          <App />
+        </QueryClientProvider>
+      </WagmiProvider>
+    </I18nProvider>
   </StrictMode>
 );

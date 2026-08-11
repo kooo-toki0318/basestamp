@@ -1,15 +1,9 @@
-export type Bindings = {
-  DB: D1Database;
-  APP_ENV?: string;
-  MAINNET_WRITES_ENABLED?: string;
-  SPONSOR_ENABLED?: string;
-  X402_TESTNET_ENABLED?: string;
-  X402_MAINNET_ENABLED?: string;
-  SIWE_ALLOWED_DOMAIN?: string;
-  SIWE_ALLOWED_ORIGIN?: string;
-  SIWE_CHAIN_IDS?: string;
-  SESSION_HASH_SECRET?: string;
-};
+type StringBindingKey = {
+  [Key in keyof Env]-?: Env[Key] extends string ? Key : never;
+}[keyof Env];
+
+export type Bindings = Omit<Env, StringBindingKey> &
+  Partial<Pick<Env, StringBindingKey>>;
 
 export type AuthConfig = {
   domain: string;

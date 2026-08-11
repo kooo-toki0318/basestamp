@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useI18n } from "../i18n-context";
 
 const TEXT_PREVIEW_BYTES = 64 * 1024;
 const IMAGE_EXTENSIONS = new Set(["avif", "gif", "jpeg", "jpg", "png", "svg", "webp"]);
@@ -11,7 +12,8 @@ type FilePreviewProperties = {
 };
 
 function TextPreview({ file }: FilePreviewProperties) {
-  const [text, setText] = useState("Loading preview…");
+  const { t } = useI18n();
+  const [text, setText] = useState(t("preview.loading"));
 
   useEffect(() => {
     let active = true;
@@ -22,24 +24,25 @@ function TextPreview({ file }: FilePreviewProperties) {
         if (active) setText(value);
       })
       .catch(() => {
-        if (active) setText("Text preview is unavailable.");
+        if (active) setText(t("preview.textUnavailable"));
       });
     return () => {
       active = false;
     };
-  }, [file]);
+  }, [file, t]);
 
   return (
     <>
       <pre className="file-preview-text">{text}</pre>
       {file.size > TEXT_PREVIEW_BYTES && (
-        <p className="muted">Preview limited to the first 64 KiB.</p>
+        <p className="muted">{t("preview.limited")}</p>
       )}
     </>
   );
 }
 
 export function FilePreview({ file }: FilePreviewProperties) {
+  const { t } = useI18n();
   const [objectUrl] = useState(() => URL.createObjectURL(file));
   const mimeType = file.type.toLowerCase();
   const extension = file.name.split(".").at(-1)?.toLowerCase() ?? "";
@@ -57,12 +60,12 @@ export function FilePreview({ file }: FilePreviewProperties) {
 
   let preview: React.ReactNode;
   if (isImage) {
-    preview = <img src={objectUrl} alt="Selected file preview" />;
+    preview = <img src={objectUrl} alt={t("preview.imageAlt")} />;
   } else if (mimeType === "application/pdf" || extension === "pdf") {
     preview = (
       <iframe
         src={objectUrl}
-        title="Selected PDF preview"
+        title={t("preview.pdfTitle")}
         sandbox=""
       />
     );
@@ -80,15 +83,13 @@ export function FilePreview({ file }: FilePreviewProperties) {
     preview = <TextPreview file={file} />;
   } else {
     preview = (
-      <p className="muted">
-        Inline preview is not available for this file type.
-      </p>
+      <p className="muted">{t("preview.unavailable")}</p>
     );
   }
 
   return (
     <div className="file-preview">
-      <span className="preview-label">Local preview</span>
+      <span className="preview-label">{t("preview.label")}</span>
       {preview}
     </div>
   );

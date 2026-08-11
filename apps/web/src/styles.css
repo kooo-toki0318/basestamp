@@ -428,28 +428,122 @@ a {
   text-decoration: none;
 }
 
-.network-picker {
+.nav-links {
+  margin-inline: 28px auto;
+}
+
+.context-bar {
   display: flex;
+  margin-top: 10px;
   align-items: center;
+  gap: 10px;
+}
+
+.context-controls {
+  display: flex;
+  flex: 0 0 auto;
   gap: 8px;
-  color: #5d6f67;
-  font-size: 0.76rem;
-  font-weight: 700;
+}
+
+.setting-picker {
+  display: flex;
+  min-height: 52px;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 11px;
+  border: 1px solid rgb(23 44 37 / 16%);
+  border-radius: 14px;
+  background: rgb(255 255 255 / 68%);
+  box-shadow: 0 8px 24px rgb(32 92 69 / 4%);
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease,
+    background 150ms ease;
+}
+
+.setting-picker:focus-within {
+  border-color: rgb(32 92 69 / 48%);
+  background: rgb(255 255 255 / 88%);
+  box-shadow: 0 0 0 3px rgb(49 120 91 / 14%);
+}
+
+.setting-icon {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 9px;
+  color: #205c45;
+  background: rgb(190 223 199 / 52%);
+}
+
+.setting-icon svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentcolor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.25;
+}
+
+.setting-field {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+.setting-label {
+  color: #6a7b73;
+  font-size: 0.61rem;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.setting-select {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  align-items: center;
+}
+
+.setting-select select {
+  min-width: 0;
+  appearance: none;
+  padding: 1px 22px 1px 0;
+  border: 0;
+  outline: 0;
+  color: #172c25;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 750;
+  line-height: 1.25;
+}
+
+.setting-select svg {
+  position: absolute;
+  right: 1px;
+  width: 10px;
+  height: 7px;
+  fill: none;
+  pointer-events: none;
+  stroke: #587066;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.5;
 }
 
 .network-picker select {
-  min-height: 38px;
-  padding: 6px 32px 6px 11px;
-  border: 1px solid rgb(23 44 37 / 22%);
-  border-radius: 999px;
-  color: #172c25;
-  background: rgb(255 255 255 / 72%);
-  font: inherit;
+  width: 164px;
 }
 
-.network-picker select:focus-visible {
-  outline: 3px solid rgb(49 120 91 / 24%);
-  outline-offset: 2px;
+.language-picker select {
+  width: 76px;
 }
 
 .auth-area {
@@ -528,20 +622,21 @@ button.icon-button svg {
 
 .auth-status {
   display: flex;
-  min-height: 42px;
+  min-width: 0;
+  min-height: 52px;
+  flex: 1 1 auto;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: 10px;
-  margin-top: 10px;
-  padding: 9px 14px;
+  padding: 10px 15px;
   border: 1px solid rgb(23 44 37 / 12%);
-  border-radius: 12px;
+  border-radius: 14px;
   color: #40564d;
   background: rgb(255 255 255 / 48%);
   box-shadow: 0 8px 24px rgb(32 92 69 / 4%);
   font-size: 0.86rem;
   line-height: 1.5;
-  text-align: right;
+  text-align: left;
 }
 
 .auth-status::before {
@@ -551,6 +646,14 @@ button.icon-button svg {
   border-radius: 50%;
   background: #4b8a70;
   content: "";
+}
+
+.auth-context {
+  margin-left: auto;
+  color: #65776f;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 0.74rem;
+  white-space: nowrap;
 }
 
 .workspace {
@@ -796,6 +899,11 @@ button.icon-button svg {
     flex-wrap: wrap;
   }
 
+  .context-bar {
+    align-items: stretch;
+    flex-wrap: wrap;
+  }
+
   .flow-grid,
   .handoff-grid {
     grid-template-columns: 1fr;
@@ -811,9 +919,26 @@ button.icon-button svg {
 }
 
 @media (max-width: 620px) {
-  .network-picker {
+  .context-bar {
+    flex-direction: column;
+  }
+
+  .context-controls {
     width: 100%;
-    justify-content: space-between;
+  }
+
+  .setting-picker {
+    min-width: 0;
+    flex: 1 1 0;
+  }
+
+  .network-picker {
+    flex-basis: 62%;
+  }
+
+  .network-picker select,
+  .language-picker select {
+    width: 100%;
   }
 
   .auth-area {
@@ -823,8 +948,15 @@ button.icon-button svg {
   }
 
   .auth-status {
-    text-align: left;
+    flex-wrap: wrap;
     justify-content: flex-start;
+    text-align: left;
+  }
+
+  .auth-context {
+    width: 100%;
+    margin-left: 18px;
+    white-space: normal;
   }
 
   .workspace {

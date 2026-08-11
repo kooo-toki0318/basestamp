@@ -9,7 +9,10 @@ import {
 } from "viem";
 import { useWriteContract } from "wagmi";
 import type { Session } from "../auth-types";
+import { useI18n, type MessageKey } from "../i18n-context";
+import { localeTag } from "../locale";
 import { FilePreview } from "../components/FilePreview";
+import { HandoffStory } from "../components/HandoffStory";
 import { calculateFileCommitment } from "../lib/commitment-worker";
 import {
   bytes32ToBase64Url,
@@ -62,10 +65,28 @@ type CreatePageProperties = {
   address: Address | undefined;
   selectedChainId: SupportedChainId;
   session: Session;
+  authBusy: boolean;
+  baseSignInAvailable: boolean;
+  browserSignInAvailable: boolean;
+  onSignInBase: () => void;
+  onSignInBrowser: () => void;
+  onAuthenticate: () => void;
 };
+
+const PURPOSE_LABEL_KEYS = {
+  deliverable: "metadata.purpose.deliverable",
+  release: "metadata.purpose.release",
+  report: "metadata.purpose.report",
+  specification: "metadata.purpose.specification",
+  "meeting-record": "metadata.purpose.meetingRecord"
+} satisfies Record<Purpose, MessageKey>;
 
 function shortHex(value: string): string {
   return value.slice(0, 10) + "…" + value.slice(-8);
+}
+
+function shortAddress(value: Address): string {
+  return value.slice(0, 6) + "…" + value.slice(-4);
 }
 
 function downloadPackage(package_: VerificationPackage): void {
@@ -83,8 +104,15 @@ function downloadPackage(package_: VerificationPackage): void {
 export function CreatePage({
   address,
   selectedChainId,
-  session
+  session,
+  authBusy,
+  baseSignInAvailable,
+  browserSignInAvailable,
+  onSignInBase,
+  onSignInBrowser,
+  onAuthenticate
 }: CreatePageProperties) {
+  const { locale, t } = useI18n();
   const [file, setFile] = useState<File>();
   const [contentType, setContentType] =
     useState<ContentType>("application/pdf");
@@ -93,7 +121,7 @@ export function CreatePage({
   const [package_, setPackage] = useState<VerificationPackage>();
   const [pendingConfirmation, setPendingConfirmation] =
     useState<PendingConfirmation>();
-  const [status, setStatus] = useState("Choose a file to begin.");
+  const [status, setStatus] = useState(t("create.status.chooseFile"));
   const [busy, setBusy] = useState(false);
   const { mutateAsync: writeContractAsync } = useWriteContract();
   const selectedNetwork = getBaseNetwork(selectedChainId);
@@ -104,14 +132,12 @@ export function CreatePage({
     void parseVerificationPackage(source)
       .then((latestPackage) => {
         setPackage(latestPackage);
-        setStatus(
-          "Latest verification package restored from this browser tab."
-        );
+        setStatus(t("create.status.latestRestored"));
       })
       .catch(() => {
         // Invalid or expired tab state is ignored.
       });
-  }, []);
+  }, [t]);
 
   const authenticatedAddress =
     session.authenticated && address !== undefined
@@ -119,17 +145,35 @@ export function CreatePage({
         session.chainId === selectedChainId
       : false;
 
+  const shareMessage =
+    package_ === undefined
+      ? ""
+      : t("create.shareMessage", { url: package_.verificationUrl });
+
+  async function copyText(
+    value: string,
+    successKey: MessageKey,
+    failureKey: MessageKey
+  ): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(value);
+      setStatus(t(successKey));
+    } catch {
+      setStatus(t(failureKey));
+    }
+  }
+
   function chooseFile(nextFile: File | undefined): void {
     setPrepared(undefined);
     setPackage(undefined);
     if (nextFile === undefined) {
       setFile(undefined);
-      setStatus("Choose a file to begin.");
+      setStatus(t("create.status.chooseFile"));
       return;
     }
     if (nextFile.size > MAX_FILE_SIZE_BYTES) {
       setFile(undefined);
-      setStatus("File exceeds the 25 MiB limit.");
+      setStatus(t("create.status.fileTooLarge"));
       return;
     }
     setFile(nextFile);
@@ -137,7 +181,7 @@ export function CreatePage({
       (value) => value === nextFile.type
     );
     setContentType(detectedContentType ?? "application/octet-stream");
-    setStatus("Ready to calculate locally.");
+    setStatus(t("create.status.ready"));
   }
 
   async function prepare(): Promise<void> {
@@ -156,8 +200,8 @@ export function CreatePage({
         calculateFileCommitment(file, contentSalt, (workerStatus) => {
           setStatus(
             workerStatus === "reading"
-              ? "Reading inside the dedicated worker…"
-              : "Calculating SHA-256 inside the dedicated worker…"
+              ? t("create.status.reading")
+              : t("create.status.calculating")
           );
         }),
         hashMetadata(metadata)
@@ -170,9 +214,9 @@ export function CreatePage({
         metadata,
         metadataHash
       });
-      setStatus("Public values are ready for review.");
+      setStatus(t("create.status.valuesReady"));
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Preparation failed.");
+      setStatus(error instanceof Error ? error.message : t("create.status.preparationFailed"));
     } finally {
       setBusy(false);
     }
@@ -180,7 +224,7 @@ export function CreatePage({
 
   async function submit(): Promise<void> {
     if (!registryAvailable && pendingConfirmation === undefined) {
-      setStatus("Base Mainnet recording is not available in this release.");
+      setStatus(t("create.status.mainnetUnavailable"));
       return;
     }
     if (
@@ -189,7 +233,7 @@ export function CreatePage({
         address === undefined ||
         !authenticatedAddress)
     ) {
-      setStatus("Sign in with the connected wallet before recording.");
+      setStatus(t("create.status.signInRequired"));
       return;
     }
 
@@ -198,7 +242,7 @@ export function CreatePage({
     try {
       if (activeConfirmation === undefined) {
         if (prepared === undefined || address === undefined) {
-          throw new Error("The local record is no longer available.");
+          throw new Error(t("create.status.localRecordMissing"));
         }
         const stampNonceHex = bytesToHex(prepared.stampNonce);
         const expectedStampId = deriveStampId({
@@ -210,7 +254,7 @@ export function CreatePage({
           stampNonce: stampNonceHex
         });
 
-        setStatus("Review and approve the Registry transaction in your wallet…");
+        setStatus(t("create.status.approveTransaction"));
         const transactionHash = await writeContractAsync({
           address: BASE_SEPOLIA_DEPLOYMENT.registryAddress,
           abi: registryAbi,
@@ -240,7 +284,7 @@ export function CreatePage({
         transactionHash
       } = activeConfirmation;
 
-      setStatus("Transaction submitted. Waiting for confirmation…");
+      setStatus(t("create.status.waiting"));
       const receipt = await baseSepoliaPublicClient.waitForTransactionReceipt({
         hash: transactionHash,
         confirmations: 1
@@ -248,7 +292,7 @@ export function CreatePage({
       if (receipt.status !== "success") {
         setPendingConfirmation(undefined);
         activeConfirmation = undefined;
-        throw new Error("The Registry transaction reverted.");
+        throw new Error(t("create.status.reverted"));
       }
 
       const events = parseEventLogs({
@@ -261,7 +305,7 @@ export function CreatePage({
         (candidate) => candidate.args.stampId === expectedStampId
       );
       if (event === undefined) {
-        throw new Error("The confirmation did not contain the expected event.");
+        throw new Error(t("create.status.missingEvent"));
       }
 
       const block = await baseSepoliaPublicClient.getBlock({
@@ -272,7 +316,7 @@ export function CreatePage({
         event.args.contentCommitment !== confirmedPrepared.contentCommitment ||
         event.args.metadataHash !== confirmedPrepared.metadataHash
       ) {
-        throw new Error("The confirmed event does not match local values.");
+        throw new Error(t("create.status.eventMismatch"));
       }
 
       const nextPackage: VerificationPackage = {
@@ -306,18 +350,19 @@ export function CreatePage({
       cacheCreatedVerificationPackage(nextPackage);
       downloadPackage(nextPackage);
       setPendingConfirmation(undefined);
-      setStatus("Recorded on Base Sepolia. The verification JSON was downloaded.");
+      setStatus(t("create.status.recorded"));
     } catch (error) {
       if (activeConfirmation !== undefined) {
         setStatus(
-          `Transaction ${shortHex(activeConfirmation.transactionHash)} was submitted. ` +
-            "Confirmation is temporarily unavailable; retry confirmation without sending another transaction."
+          t("create.status.confirmationRetry", {
+            transaction: shortHex(activeConfirmation.transactionHash)
+          })
         );
       } else {
         const message =
           error instanceof Error
-            ? (error.message.split("\n", 1)[0] ?? "Recording failed.")
-            : "Recording failed.";
+            ? (error.message.split("\n", 1)[0] ?? t("create.status.recordingFailed"))
+            : t("create.status.recordingFailed");
         setStatus(message);
       }
     } finally {
@@ -328,33 +373,105 @@ export function CreatePage({
   return (
     <section className="shell workspace">
       <div className="workspace-heading">
-        <p className="eyebrow">Create · {selectedNetwork.name}</p>
-        <h1>Record a private file commitment.</h1>
-        <p className="lede">
-          The file is read only in a dedicated browser worker. File bytes and
-          file names are never sent to BaseStamp servers.
-        </p>
+        <p className="eyebrow">{t("create.eyebrow", { network: selectedNetwork.name })}</p>
+        <h1>{t("create.title")}</h1>
+        <p className="lede">{t("create.lede")}</p>
       </div>
 
-      <div className="notice warning">
-        Recorded values are public and cannot be deleted. Do not enter personal
-        information or confidential text. This is not notarization or a guarantee
-        of legal effect.
-      </div>
+      <HandoffStory compact activeRole="create" />
+
+      <section
+        className={
+          authenticatedAddress ? "auth-readiness is-ready" : "auth-readiness"
+        }
+        aria-labelledby="create-auth-heading"
+      >
+        <div className="auth-readiness-copy">
+          <h2 id="create-auth-heading">{t("create.authTitle")}</h2>
+          <p>{t("create.authIntro")}</p>
+        </div>
+        <ol className="auth-checklist">
+          <li className={address === undefined ? "is-needed" : "is-complete"}>
+            <span className="auth-check-number">1</span>
+            <span>
+              <strong>{t("create.walletStep")}</strong>
+              <small>
+                {address === undefined
+                  ? t("create.walletMissing")
+                  : t("create.walletConnected", { address: shortAddress(address) })}
+              </small>
+            </span>
+            <span className="requirement-badge">
+              {t(
+                address === undefined
+                  ? "create.requirementNeeded"
+                  : "create.requirementComplete"
+              )}
+            </span>
+          </li>
+          <li className={authenticatedAddress ? "is-complete" : "is-needed"}>
+            <span className="auth-check-number">2</span>
+            <span>
+              <strong>{t("create.authenticationStep")}</strong>
+              <small>
+                {authenticatedAddress
+                  ? t("create.authenticationComplete", {
+                      network: selectedNetwork.name
+                    })
+                  : t("create.authenticationMissing")}
+              </small>
+            </span>
+            <span className="requirement-badge">
+              {t(
+                authenticatedAddress
+                  ? "create.requirementComplete"
+                  : "create.requirementNeeded"
+              )}
+            </span>
+          </li>
+        </ol>
+        <div className="auth-readiness-actions">
+          {address === undefined ? (
+            <>
+              <button
+                type="button"
+                onClick={onSignInBase}
+                disabled={authBusy || !baseSignInAvailable}
+              >
+                {t("auth.signInBase")}
+              </button>
+              {browserSignInAvailable && (
+                <button
+                  className="secondary"
+                  type="button"
+                  onClick={onSignInBrowser}
+                  disabled={authBusy}
+                >
+                  {t("auth.browserWallet")}
+                </button>
+              )}
+            </>
+          ) : !authenticatedAddress ? (
+            <button type="button" onClick={onAuthenticate} disabled={authBusy}>
+              {t("auth.authenticate")}
+            </button>
+          ) : (
+            <p className="auth-ready-message">{t("create.authReady")}</p>
+          )}
+        </div>
+      </section>
+
+      <div className="notice warning">{t("create.warning")}</div>
 
       {!registryAvailable && (
-        <div className="notice">
-          Base Mainnet can be selected and connected, but its Registry is not
-          deployed in this release. File preparation remains local and no
-          Mainnet transaction can be submitted.
-        </div>
+        <div className="notice">{t("create.mainnetNotice")}</div>
       )}
 
       <div className="flow-grid">
         <section className="panel">
-          <span className="step-label">1 · Local preparation</span>
+          <span className="step-label">{t("create.step1")}</span>
           <label className="field">
-            <span>File, maximum 25 MiB</span>
+            <span>{t("create.fileLabel")}</span>
             <input
               type="file"
               onChange={(event) => {
@@ -371,7 +488,7 @@ export function CreatePage({
           )}
           <div className="field-grid">
             <label className="field">
-              <span>Content type</span>
+              <span>{t("create.contentType")}</span>
               <select
                 value={contentType}
                 onChange={(event) => {
@@ -386,7 +503,7 @@ export function CreatePage({
               </select>
             </label>
             <label className="field">
-              <span>Purpose</span>
+              <span>{t("create.purpose")}</span>
               <select
                 value={purpose}
                 onChange={(event) => {
@@ -396,7 +513,9 @@ export function CreatePage({
                 disabled={busy}
               >
                 {PURPOSES.map((value) => (
-                  <option key={value} value={value}>{value}</option>
+                  <option key={value} value={value}>
+                    {t(PURPOSE_LABEL_KEYS[value])}
+                  </option>
                 ))}
               </select>
             </label>
@@ -406,111 +525,147 @@ export function CreatePage({
             onClick={() => void prepare()}
             disabled={busy || file === undefined}
           >
-            Calculate locally
+            {t("create.calculate")}
           </button>
         </section>
 
         <section className="panel">
-          <span className="step-label">2 · Review public values</span>
+          <span className="step-label">{t("create.step2")}</span>
           {prepared === undefined ? (
-            <p className="muted">Calculate the commitment to review it here.</p>
+            <p className="muted">{t("create.reviewEmpty")}</p>
           ) : (
             <dl className="technical-list">
-              <div><dt>File size</dt><dd>{prepared.fileSize.toLocaleString()} bytes</dd></div>
-              <div><dt>Commitment</dt><dd title={prepared.contentCommitment}>{shortHex(prepared.contentCommitment)}</dd></div>
-              <div><dt>Metadata hash</dt><dd title={prepared.metadataHash}>{shortHex(prepared.metadataHash)}</dd></div>
+              <div><dt>{t("create.fileSize")}</dt><dd>{prepared.fileSize.toLocaleString(localeTag(locale))} {t("common.bytes")}</dd></div>
+              <div><dt>{t("create.commitment")}</dt><dd title={prepared.contentCommitment}>{shortHex(prepared.contentCommitment)}</dd></div>
+              <div><dt>{t("create.metadataHash")}</dt><dd title={prepared.metadataHash}>{shortHex(prepared.metadataHash)}</dd></div>
               <div>
-                <dt>Registry</dt>
+                <dt>{t("create.registry")}</dt>
                 <dd>
-                  {registryAvailable ? shortHex(BASE_SEPOLIA_DEPLOYMENT.registryAddress) : "Not deployed"}
+                  {registryAvailable ? shortHex(BASE_SEPOLIA_DEPLOYMENT.registryAddress) : t("common.notDeployed")}
                 </dd>
               </div>
             </dl>
           )}
-          <p className="muted">
-            The content salt stays in the verification package. Losing it makes
-            local file comparison impossible.
-          </p>
+          <p className="muted">{t("create.saltWarning")}</p>
         </section>
 
         <section className="panel">
-          <span className="step-label">3 · Record and save</span>
-          {!registryAvailable && (
-            <p className="muted">Recording is not available on Base Mainnet yet.</p>
-          )}
-          {registryAvailable &&
-            pendingConfirmation === undefined &&
-            !authenticatedAddress && (
-            <p className="muted">
-              Sign in from the header with the same connected wallet before
-              submitting.
-            </p>
-          )}
-          {pendingConfirmation !== undefined && (
-            <a
-              href={`https://sepolia.basescan.org/tx/${pendingConfirmation.transactionHash}`}
-              target="_blank"
-              rel="noreferrer"
-            >
-              View submitted transaction
-            </a>
-          )}
-          <button
-            type="button"
-            onClick={() => void submit()}
-            disabled={
-              busy ||
-              (pendingConfirmation === undefined &&
-                (prepared === undefined ||
-                  !authenticatedAddress ||
-                  !registryAvailable))
-            }
-          >
-            {pendingConfirmation === undefined ? `Record on ${selectedNetwork.name}` : "Retry confirmation"}
-          </button>
-          <p className="muted">
-            {registryAvailable
-              ? `Sponsorship is disabled. Your wallet pays the ${selectedNetwork.name} network fee.`
-              : "No Mainnet transaction will be requested."}
-          </p>
-          {package_ !== undefined && (
-            <div className="result-box">
-              <strong>Record confirmed — save the JSON now</strong>
+          <span className="step-label">{t("create.step3")}</span>
+          {package_ === undefined ? (
+            <>
+              {!registryAvailable && (
+                <p className="muted">{t("create.mainnetUnavailable")}</p>
+              )}
+              {registryAvailable &&
+                pendingConfirmation === undefined &&
+                !authenticatedAddress && (
+                  <p className="muted">{t("create.signInHint")}</p>
+                )}
+              {pendingConfirmation !== undefined && (
+                <a
+                  href={
+                    "https://sepolia.basescan.org/tx/" +
+                    pendingConfirmation.transactionHash
+                  }
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {t("create.viewTransaction")}
+                </a>
+              )}
+              <button
+                type="button"
+                onClick={() => void submit()}
+                disabled={
+                  busy ||
+                  (pendingConfirmation === undefined &&
+                    (prepared === undefined ||
+                      !authenticatedAddress ||
+                      !registryAvailable))
+                }
+              >
+                {pendingConfirmation === undefined
+                  ? t("create.recordOn", { network: selectedNetwork.name })
+                  : t("create.retryConfirmation")}
+              </button>
               <p className="muted">
-                Keep the downloaded JSON with the original file. Send both to
-                the recipient; they can verify without connecting a wallet.
+                {registryAvailable
+                  ? t("create.feeNotice", { network: selectedNetwork.name })
+                  : t("create.noMainnetTransaction")}
               </p>
+            </>
+          ) : (
+            <div className="result-box completed-result">
+              <div className="result-heading">
+                <span className="result-check" aria-hidden="true">✓</span>
+                <strong>{t("create.confirmedTitle")}</strong>
+              </div>
+              <p className="muted">{t("create.confirmedBody")}</p>
               <button
                 type="button"
                 onClick={() => {
                   downloadPackage(package_);
-                  setStatus("Verification package downloaded again.");
+                  setStatus(t("create.status.downloadedAgain"));
                 }}
               >
-                Download verification package
+                {t("create.downloadPackage")}
               </button>
-              <button
-                type="button"
-                className="secondary"
-                onClick={() => {
-                  void navigator.clipboard
-                    .writeText(package_.verificationUrl)
-                    .then(() => {
-                      setStatus("Verification link copied.");
-                    })
-                    .catch(() => {
-                      setStatus("Could not copy the verification link.");
-                    });
-                }}
-              >
-                Copy verification link
-              </button>
+              <div className="share-panel">
+                <h3>{t("create.shareTitle")}</h3>
+                <span className="share-label">
+                  {t("create.verificationUrl")}
+                </span>
+                <div className="share-url-row">
+                  <a
+                    href={package_.verificationUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {package_.verificationUrl}
+                  </a>
+                  <button
+                    type="button"
+                    className="icon-button copy-share"
+                    aria-label={t("create.copyUrl")}
+                    title={t("create.copyUrl")}
+                    onClick={() =>
+                      void copyText(
+                        package_.verificationUrl,
+                        "create.status.linkCopied",
+                        "create.status.linkCopyFailed"
+                      )
+                    }
+                  >
+                    <svg viewBox="0 0 20 20" aria-hidden="true">
+                      <rect x="6.5" y="6.5" width="9" height="9" rx="1.5" />
+                      <path d="M4.5 13.5h-1A1.5 1.5 0 0 1 2 12V3.5A1.5 1.5 0 0 1 3.5 2H12a1.5 1.5 0 0 1 1.5 1.5v1" />
+                    </svg>
+                  </button>
+                </div>
+                <span className="share-label">
+                  {t("create.shareMessageLabel")}
+                </span>
+                <p className="share-message">{shareMessage}</p>
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() =>
+                    void copyText(
+                      shareMessage,
+                      "create.status.shareMessageCopied",
+                      "create.status.shareMessageCopyFailed"
+                    )
+                  }
+                >
+                  {t("create.copyShareMessage")}
+                </button>
+              </div>
               <a
                 href={"/stamps/" + package_.stampId}
                 target="_blank"
                 rel="noreferrer"
               >
-                Open stamp details in a new tab
+                {t("create.openDetails")}
               </a>
             </div>
           )}

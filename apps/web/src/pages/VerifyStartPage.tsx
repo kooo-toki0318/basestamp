@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { useI18n } from "../i18n-context";
+import { HandoffStory } from "../components/HandoffStory";
 import { cacheVerificationPackage } from "../local-package";
 import {
   MAX_PACKAGE_BYTES,
@@ -6,20 +8,19 @@ import {
 } from "../lib/verification-package";
 
 export function VerifyStartPage() {
-  const [status, setStatus] = useState(
-    "Choose the BaseStamp JSON received with the original file."
-  );
+  const { t } = useI18n();
+  const [status, setStatus] = useState(t("verifyStart.status.choose"));
   const [busy, setBusy] = useState(false);
 
   async function beginVerification(packageFile: File | undefined): Promise<void> {
     if (packageFile === undefined) return;
     if (packageFile.size > MAX_PACKAGE_BYTES) {
-      setStatus("Verification package exceeds the 64 KiB limit.");
+      setStatus(t("verifyStart.status.tooLarge"));
       return;
     }
 
     setBusy(true);
-    setStatus("Checking the verification package…");
+    setStatus(t("verifyStart.status.checking"));
     try {
       const package_ = await parseVerificationPackage(await packageFile.text());
       cacheVerificationPackage(package_);
@@ -28,7 +29,7 @@ export function VerifyStartPage() {
       setStatus(
         error instanceof Error
           ? error.message
-          : "Verification package could not be opened."
+          : t("verifyStart.status.failed")
       );
       setBusy(false);
     }
@@ -37,20 +38,18 @@ export function VerifyStartPage() {
   return (
     <section className="shell workspace">
       <div className="workspace-heading">
-        <p className="eyebrow">Verify a handoff · Base Sepolia</p>
-        <h1>Check a file you received.</h1>
-        <p className="lede">
-          Start with the BaseStamp JSON supplied by the sender. The app reads its
-          stamp ID, checks the approved Registry, and then compares the original
-          file locally in this browser.
-        </p>
+        <p className="eyebrow">{t("verifyStart.eyebrow")}</p>
+        <h1>{t("verifyStart.title")}</h1>
+        <p className="lede">{t("verifyStart.lede")}</p>
       </div>
+
+      <HandoffStory compact activeRole="verify" />
 
       <div className="handoff-grid">
         <section className="panel">
-          <span className="step-label">1 · Open verification package</span>
+          <span className="step-label">{t("verifyStart.step1")}</span>
           <label className="field">
-            <span>BaseStamp JSON, maximum 64 KiB</span>
+            <span>{t("verifyStart.fileLabel")}</span>
             <input
               type="file"
               accept="application/json,.json"
@@ -60,18 +59,15 @@ export function VerifyStartPage() {
               disabled={busy}
             />
           </label>
-          <p className="muted">
-            The JSON contains the private comparison salt. It stays in this tab
-            and is not uploaded to BaseStamp.
-          </p>
+          <p className="muted">{t("verifyStart.saltNotice")}</p>
         </section>
 
         <section className="panel">
-          <span className="step-label">What the recipient needs</span>
+          <span className="step-label">{t("verifyStart.needsTitle")}</span>
           <ol className="handoff-list">
-            <li>The downloaded BaseStamp JSON</li>
-            <li>The candidate original file</li>
-            <li>This web app—no wallet connection is required</li>
+            <li>{t("verifyStart.need1")}</li>
+            <li>{t("verifyStart.need2")}</li>
+            <li>{t("verifyStart.need3")}</li>
           </ol>
         </section>
       </div>

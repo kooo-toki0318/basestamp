@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
 import { hexToBytes, type Hex } from "viem";
+import { useI18n } from "../i18n-context";
+import { HandoffStory } from "../components/HandoffStory";
+import { localeTag } from "../locale";
 import { calculateFileCommitment } from "../lib/commitment-worker";
 import {
   base64UrlToBytes32,
@@ -14,7 +17,8 @@ import {
 } from "../lib/onchain";
 import {
   cacheVerificationPackage,
-  readCachedVerificationPackage
+  readCachedVerificationPackage,
+  removeCachedVerificationPackage
 } from "../local-package";
 import type { RegistryStamp } from "../lib/registry";
 import {
@@ -33,10 +37,11 @@ function shortHex(value: string): string {
 }
 
 export function StampPage({ stampId }: StampPageProperties) {
+  const { locale, t } = useI18n();
   const [stamp, setStamp] = useState<RegistryStamp>();
   const [package_, setPackage] = useState<VerificationPackage>();
   const [file, setFile] = useState<File>();
-  const [status, setStatus] = useState("Loading Registry record…");
+  const [status, setStatus] = useState(t("stamp.status.loading"));
   const [match, setMatch] = useState<boolean>();
   const [busy, setBusy] = useState(false);
 
@@ -46,7 +51,7 @@ export function StampPage({ stampId }: StampPageProperties) {
       .then(async (nextStamp) => {
         if (!active) return;
         setStamp(nextStamp);
-        setStatus("Registry record loaded.");
+        setStatus(t("stamp.status.loaded"));
         const cachedSource = readCachedVerificationPackage(stampId);
         if (cachedSource === undefined) return;
         setBusy(true);
@@ -55,23 +60,21 @@ export function StampPage({ stampId }: StampPageProperties) {
           const verifiedStamp = await verifyPackageOnchain(parsed);
           setStamp(verifiedStamp);
           setPackage(parsed);
-          setStatus(
-            "Saved verification package restored. Choose the original file."
-          );
+          setStatus(t("stamp.status.restored"));
         } catch {
-          setStatus("The saved verification package could not be restored.");
+          setStatus(t("stamp.status.restoreFailed"));
         } finally {
           setBusy(false);
         }
       })
       .catch(() => {
         if (!active) return;
-        setStatus("This stamp was not found in the approved Registry.");
+        setStatus(t("stamp.status.notFound"));
       });
     return () => {
       active = false;
     };
-  }, [stampId]);
+  }, [stampId, t]);
 
   async function loadPackage(packageFile: File | undefined): Promise<void> {
     setPackage(undefined);
@@ -79,7 +82,7 @@ export function StampPage({ stampId }: StampPageProperties) {
     setMatch(undefined);
     if (packageFile === undefined) return;
     if (packageFile.size > MAX_PACKAGE_BYTES) {
-      setStatus("Verification package exceeds the 64 KiB limit.");
+      setStatus(t("stamp.status.packageTooLarge"));
       return;
     }
 
@@ -87,20 +90,26 @@ export function StampPage({ stampId }: StampPageProperties) {
     try {
       const parsed = await parseVerificationPackage(await packageFile.text());
       if (parsed.stampId !== stampId) {
-        throw new Error("Package stamp ID does not match this page.");
+        throw new Error(t("stamp.status.idMismatch"));
       }
       const verifiedStamp = await verifyPackageOnchain(parsed);
       setStamp(verifiedStamp);
       setPackage(parsed);
       cacheVerificationPackage(parsed);
-      setStatus(
-        "Package, Registry, receipt, block, and event all match. Choose the original file."
-      );
+      setStatus(t("stamp.status.packageVerified"));
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Package verification failed.");
+      setStatus(error instanceof Error ? error.message : t("stamp.status.packageFailed"));
     } finally {
       setBusy(false);
     }
+  }
+
+  function clearPackage(): void {
+    removeCachedVerificationPackage(stampId);
+    setPackage(undefined);
+    setFile(undefined);
+    setMatch(undefined);
+    setStatus(t("stamp.status.packageCleared"));
   }
 
   async function verifyFile(): Promise<void> {
@@ -112,7 +121,7 @@ export function StampPage({ stampId }: StampPageProperties) {
     try {
       if (file.size !== package_.commitment.fileSize) {
         setMatch(false);
-        setStatus("File size does not match the verification package.");
+        setStatus(t("stamp.status.fileSizeMismatch"));
         return;
       }
       const result = await calculateFileCommitment(
@@ -121,8 +130,8 @@ export function StampPage({ stampId }: StampPageProperties) {
         (workerStatus) => {
           setStatus(
             workerStatus === "reading"
-              ? "Reading inside the dedicated worker…"
-              : "Recalculating the commitment locally…"
+              ? t("stamp.status.reading")
+              : t("stamp.status.recalculating")
           );
         }
       );
@@ -138,11 +147,11 @@ export function StampPage({ stampId }: StampPageProperties) {
       setMatch(nextMatch);
       setStatus(
         nextMatch
-          ? "The selected file and verification key match the Base record."
-          : "The selected file or verification key does not match the Base record."
+          ? t("stamp.status.match")
+          : t("stamp.status.noMatch")
       );
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Local verification failed.");
+      setStatus(error instanceof Error ? error.message : t("stamp.status.localFailed"));
     } finally {
       setBusy(false);
     }
@@ -151,25 +160,24 @@ export function StampPage({ stampId }: StampPageProperties) {
   return (
     <section className="shell workspace">
       <div className="workspace-heading">
-        <p className="eyebrow">Verify · Base Sepolia</p>
-        <h1>Check a BaseStamp record.</h1>
-        <p className="lede">
-          Public Registry data is read from the fixed Base Sepolia deployment.
-          Package URLs and RPC values are never used as request destinations.
-        </p>
+        <p className="eyebrow">{t("stamp.eyebrow")}</p>
+        <h1>{t("stamp.title")}</h1>
+        <p className="lede">{t("stamp.lede")}</p>
       </div>
+
+      <HandoffStory compact activeRole="verify" />
 
       <div className="flow-grid">
         <section className="panel">
-          <span className="step-label">1 · Registry record</span>
+          <span className="step-label">{t("stamp.step1")}</span>
           <dl className="technical-list">
-            <div><dt>Stamp ID</dt><dd title={stampId}>{shortHex(stampId)}</dd></div>
-            <div><dt>Registry</dt><dd title={BASE_SEPOLIA_DEPLOYMENT.registryAddress}>{shortHex(BASE_SEPOLIA_DEPLOYMENT.registryAddress)}</dd></div>
+            <div><dt>{t("stamp.id")}</dt><dd title={stampId}>{shortHex(stampId)}</dd></div>
+            <div><dt>{t("stamp.registry")}</dt><dd title={BASE_SEPOLIA_DEPLOYMENT.registryAddress}>{shortHex(BASE_SEPOLIA_DEPLOYMENT.registryAddress)}</dd></div>
             {stamp !== undefined && (
               <>
-                <div><dt>Creator</dt><dd title={stamp.creator}>{shortHex(stamp.creator)}</dd></div>
-                <div><dt>Created</dt><dd>{formatUnixSeconds(stamp.createdAt)}</dd></div>
-                <div><dt>Commitment</dt><dd title={stamp.contentCommitment}>{shortHex(stamp.contentCommitment)}</dd></div>
+                <div><dt>{t("stamp.creator")}</dt><dd title={stamp.creator}>{shortHex(stamp.creator)}</dd></div>
+                <div><dt>{t("stamp.created")}</dt><dd>{formatUnixSeconds(stamp.createdAt)}</dd></div>
+                <div><dt>{t("stamp.commitment")}</dt><dd title={stamp.contentCommitment}>{shortHex(stamp.contentCommitment)}</dd></div>
               </>
             )}
           </dl>
@@ -182,31 +190,48 @@ export function StampPage({ stampId }: StampPageProperties) {
             target="_blank"
             rel="noreferrer"
           >
-            Open Registry in explorer
+            {t("stamp.openExplorer")}
           </a>
         </section>
 
         <section className="panel">
-          <span className="step-label">2 · Verification package</span>
-          <label className="field">
-            <span>BaseStamp JSON, maximum 64 KiB</span>
-            <input
-              type="file"
-              accept="application/json,.json"
-              onChange={(event) => void loadPackage(event.target.files?.[0])}
-              disabled={busy || stamp === undefined}
-            />
-          </label>
-          <p className="muted">
-            The package is untrusted input. Unknown fields, duplicate keys,
-            unknown versions, and substituted chain or contract values are rejected.
-          </p>
+          <span className="step-label">{t("stamp.step2")}</span>
+          {package_ === undefined ? (
+            <>
+              <label className="field">
+                <span>{t("stamp.packageLabel")}</span>
+                <input
+                  type="file"
+                  accept="application/json,.json"
+                  onChange={(event) =>
+                    void loadPackage(event.target.files?.[0])
+                  }
+                  disabled={busy || stamp === undefined}
+                />
+              </label>
+              <p className="muted">{t("stamp.untrustedNotice")}</p>
+            </>
+          ) : (
+            <div className="package-loaded">
+              <span className="package-loaded-icon" aria-hidden="true">✓</span>
+              <strong>{t("stamp.packageLoadedTitle")}</strong>
+              <p className="muted">{t("stamp.packageLoadedBody")}</p>
+              <button
+                type="button"
+                className="secondary"
+                onClick={clearPackage}
+                disabled={busy}
+              >
+                {t("stamp.replacePackage")}
+              </button>
+            </div>
+          )}
         </section>
 
         <section className="panel">
-          <span className="step-label">3 · Local file comparison</span>
+          <span className="step-label">{t("stamp.step3")}</span>
           <label className="field">
-            <span>Original file, maximum 25 MiB</span>
+            <span>{t("stamp.fileLabel")}</span>
             <input
               type="file"
               onChange={(event) => {
@@ -220,7 +245,7 @@ export function StampPage({ stampId }: StampPageProperties) {
                 } else {
                   setFile(undefined);
                   if (nextFile !== undefined) {
-                    setStatus("File exceeds the 25 MiB limit.");
+                    setStatus(t("stamp.status.fileTooLarge"));
                   }
                 }
               }}
@@ -232,21 +257,58 @@ export function StampPage({ stampId }: StampPageProperties) {
             onClick={() => void verifyFile()}
             disabled={busy || file === undefined || package_ === undefined}
           >
-            Verify locally
+            {t("stamp.verifyLocally")}
           </button>
           {match !== undefined && (
-            <div className={match ? "match success" : "match failure"}>
-              {match ? "Match" : "No match"}
+            <div
+              className={
+                match
+                  ? "verification-result success"
+                  : "verification-result failure"
+              }
+              aria-label={match ? t("stamp.match") : t("stamp.noMatch")}
+            >
+              <div className="verification-result-heading">
+                <span aria-hidden="true">{match ? "✓" : "×"}</span>
+                <h3>
+                  {t(match ? "stamp.matchTitle" : "stamp.noMatchTitle")}
+                </h3>
+              </div>
+              <p>
+                {t(match ? "stamp.matchBody" : "stamp.noMatchBody")}
+              </p>
+              {match && package_ !== undefined && stamp !== undefined && (
+                <>
+                  <strong className="result-summary-label">
+                    {t("stamp.resultSummary")}
+                  </strong>
+                  <dl className="result-summary">
+                    <div>
+                      <dt>{t("stamp.resultCreated")}</dt>
+                      <dd>{formatUnixSeconds(stamp.createdAt)}</dd>
+                    </div>
+                    <div>
+                      <dt>{t("stamp.resultCreator")}</dt>
+                      <dd title={stamp.creator}>{shortHex(stamp.creator)}</dd>
+                    </div>
+                    <div>
+                      <dt>{t("stamp.resultFileSize")}</dt>
+                      <dd>
+                        {package_.commitment.fileSize.toLocaleString(
+                          localeTag(locale)
+                        )}{" "}
+                        {t("common.bytes")}
+                      </dd>
+                    </div>
+                  </dl>
+                </>
+              )}
             </div>
           )}
         </section>
       </div>
 
-      <div className="notice">
-        The file and content salt remain in your browser. A matching result means
-        the selected bytes and key reproduce the recorded commitment; it does not
-        prove identity, authority, acceptance, or legal effect.
-      </div>
+      <div className="notice">{t("stamp.boundary")}</div>
       <p className="status prominent" role="status" aria-live="polite">
         {status}
       </p>

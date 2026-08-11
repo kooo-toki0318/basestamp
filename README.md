@@ -75,6 +75,12 @@ The current release targets **Base Sepolia**.
 Available:
 
 - browser wallet and Sign in with Base authentication;
+- Base Account authentication through the wallet_connect SIWE capability, with a manual SIWE fallback for injected wallets;
+- Japanese and English UI catalogs with request/browser-language initialization and a persisted explicit selector;
+- a shared handoff story on Home, Create, and Verify with each page role highlighted;
+- explicit wallet-connect and authentication prerequisites on Create;
+- visible verification URL and copyable localized recipient instructions after recording;
+- clear/replace verification JSON controls and detailed match results;
 - automatic Base Sepolia/Base Mainnet wallet network switching;
 - local previews for common image, video, audio, PDF, and text formats;
 - salted SHA-256 commitments calculated in a browser worker;
@@ -181,6 +187,29 @@ Never commit:
 Use ignored local environment files for development and Cloudflare encrypted
 secrets for deployed Workers. Public browser settings belong in `VITE_*`
 variables and must never contain secret values.
+
+### Production Worker authentication
+
+SIWE fails closed unless the deployed Worker has all of the following:
+
+- an exact `SIWE_ALLOWED_DOMAIN` and `SIWE_ALLOWED_ORIGIN` in
+  `apps/web/wrangler.jsonc`;
+- one or more approved Base chain IDs in `SIWE_CHAIN_IDS`;
+- a remote D1 migration;
+- a `SESSION_HASH_SECRET` stored as a Cloudflare encrypted secret.
+
+From `apps/web`, configure a randomly generated secret interactively, then
+deploy. Never pass the secret on the command line or commit it.
+
+```bash
+pnpm exec wrangler d1 migrations apply DB --remote
+pnpm exec wrangler secret put SESSION_HASH_SECRET
+pnpm exec wrangler deploy
+```
+
+When moving to a custom domain, update both SIWE values to the exact new host
+and HTTPS origin before deploying. Do not derive these authentication values
+from request `Host` or `Origin` headers.
 
 ## Security notes
 

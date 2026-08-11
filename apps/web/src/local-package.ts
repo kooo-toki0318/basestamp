@@ -42,6 +42,14 @@ export function readLatestCreatedVerificationPackage(): string | undefined {
   }
 }
 
+export function removeCachedVerificationPackage(stampId: Hex): void {
+  try {
+    sessionStorage.removeItem(PACKAGE_SESSION_PREFIX + stampId);
+  } catch {
+    /* The in-memory package can still be cleared. */
+  }
+}
+
 export function readCachedVerificationPackage(
   stampId: Hex
 ): string | undefined {

@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "vite build",
+    "cf-typegen": "wrangler types worker/env.d.ts --include-runtime false",
     "dev": "vite --host 0.0.0.0",
     "d1:migrate:local": "wrangler d1 migrations apply DB --local",
     "d1:migrations:list:local": "wrangler d1 migrations list DB --local",
