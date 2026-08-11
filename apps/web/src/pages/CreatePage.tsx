@@ -13,6 +13,7 @@ import { useI18n, type MessageKey } from "../i18n-context";
 import { localeTag } from "../locale";
 import { FilePreview } from "../components/FilePreview";
 import { HandoffStory } from "../components/HandoffStory";
+import { getCreateHandoffStep } from "../handoff-role";
 import { calculateFileCommitment } from "../lib/commitment-worker";
 import {
   bytes32ToBase64Url,
@@ -378,94 +379,124 @@ export function CreatePage({
         <p className="lede">{t("create.lede")}</p>
       </div>
 
-      <HandoffStory compact activeRole="create" />
+      <HandoffStory
+        compact
+        activeStep={getCreateHandoffStep(
+          authenticatedAddress,
+          package_ !== undefined
+        )}
+      />
 
-      <section
-        className={
-          authenticatedAddress ? "auth-readiness is-ready" : "auth-readiness"
-        }
-        aria-labelledby="create-auth-heading"
-      >
-        <div className="auth-readiness-copy">
-          <h2 id="create-auth-heading">{t("create.authTitle")}</h2>
-          <p>{t("create.authIntro")}</p>
-        </div>
-        <ol className="auth-checklist">
-          <li className={address === undefined ? "is-needed" : "is-complete"}>
-            <span className="auth-check-number">1</span>
-            <span>
-              <strong>{t("create.walletStep")}</strong>
-              <small>
-                {address === undefined
-                  ? t("create.walletMissing")
-                  : t("create.walletConnected", { address: shortAddress(address) })}
-              </small>
-            </span>
-            <span className="requirement-badge">
-              {t(
-                address === undefined
-                  ? "create.requirementNeeded"
-                  : "create.requirementComplete"
-              )}
-            </span>
-          </li>
-          <li className={authenticatedAddress ? "is-complete" : "is-needed"}>
-            <span className="auth-check-number">2</span>
-            <span>
-              <strong>{t("create.authenticationStep")}</strong>
-              <small>
-                {authenticatedAddress
-                  ? t("create.authenticationComplete", {
-                      network: selectedNetwork.name
-                    })
-                  : t("create.authenticationMissing")}
-              </small>
-            </span>
-            <span className="requirement-badge">
-              {t(
-                authenticatedAddress
-                  ? "create.requirementComplete"
-                  : "create.requirementNeeded"
-              )}
-            </span>
-          </li>
-        </ol>
-        <div className="auth-readiness-actions">
-          {address === undefined ? (
-            <>
+      {address === undefined && (
+        <section
+          className="auth-readiness"
+          aria-labelledby="create-auth-heading"
+        >
+          <div className="auth-readiness-copy">
+            <h2 id="create-auth-heading">{t("create.authTitle")}</h2>
+            <p>{t("create.authIntro")}</p>
+          </div>
+          <ol className="auth-checklist">
+            <li className="is-needed">
+              <span className="auth-check-number">1</span>
+              <span>
+                <strong>{t("create.walletStep")}</strong>
+                <small>{t("create.walletMissing")}</small>
+              </span>
+              <span className="requirement-badge">
+                {t("create.requirementNeeded")}
+              </span>
+            </li>
+            <li>
+              <span className="auth-check-number">2</span>
+              <span>
+                <strong>{t("create.authenticationStep")}</strong>
+                <small>{t("create.authenticationMissing")}</small>
+              </span>
+              <span className="requirement-badge is-next">
+                {t("create.requirementNeeded")}
+              </span>
+            </li>
+          </ol>
+          <div className="auth-readiness-actions">
+            <button
+              type="button"
+              onClick={onSignInBase}
+              disabled={authBusy || !baseSignInAvailable}
+            >
+              {t("auth.signInBase")}
+            </button>
+            {browserSignInAvailable && (
               <button
+                className="secondary"
                 type="button"
-                onClick={onSignInBase}
-                disabled={authBusy || !baseSignInAvailable}
+                onClick={onSignInBrowser}
+                disabled={authBusy}
               >
-                {t("auth.signInBase")}
+                {t("auth.browserWallet")}
               </button>
-              {browserSignInAvailable && (
-                <button
-                  className="secondary"
-                  type="button"
-                  onClick={onSignInBrowser}
-                  disabled={authBusy}
-                >
-                  {t("auth.browserWallet")}
-                </button>
-              )}
-            </>
-          ) : !authenticatedAddress ? (
+            )}
+          </div>
+        </section>
+      )}
+
+      {address !== undefined && !authenticatedAddress && (
+        <section
+          className="authentication-prompt"
+          aria-labelledby="create-authenticate-heading"
+        >
+          <span className="authentication-prompt-icon" aria-hidden="true">
+            2
+          </span>
+          <div>
+            <p className="authentication-prompt-kicker">
+              {t("create.authenticationStep")}
+            </p>
+            <h2 id="create-authenticate-heading">
+              {t("create.authenticateTitle")}
+            </h2>
+            <p>
+              {t("create.authenticateIntro", {
+                address: shortAddress(address)
+              })}
+            </p>
+          </div>
+          <div className="authentication-prompt-action">
             <button type="button" onClick={onAuthenticate} disabled={authBusy}>
               {t("auth.authenticate")}
             </button>
-          ) : (
-            <p className="auth-ready-message">{t("create.authReady")}</p>
-          )}
-        </div>
-      </section>
+          </div>
+        </section>
+      )}
 
-      <div className="notice warning">{t("create.warning")}</div>
+      <aside className="privacy-warning">
+        <span className="privacy-warning-icon" aria-hidden="true">i</span>
+        <div>
+          <strong>{t("create.warningTitle")}</strong>
+          <p>{t("create.warning")}</p>
+        </div>
+      </aside>
 
       {!registryAvailable && (
         <div className="notice">{t("create.mainnetNotice")}</div>
       )}
+
+      <div
+        className={
+          "operation-status" +
+          (busy ? " is-busy" : "") +
+          (package_ !== undefined ? " is-success" : "")
+        }
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        <span className="operation-status-dot" aria-hidden="true" />
+        <div>
+          <span>{t("create.statusLabel")}</span>
+          <p>{status}</p>
+        </div>
+      </div>
 
       <div className="flow-grid">
         <section className="panel">
@@ -568,7 +599,7 @@ export function CreatePage({
                     pendingConfirmation.transactionHash
                   }
                   target="_blank"
-                  rel="noreferrer"
+                  rel="noopener noreferrer"
                 >
                   {t("create.viewTransaction")}
                 </a>
@@ -619,7 +650,7 @@ export function CreatePage({
                   <a
                     href={package_.verificationUrl}
                     target="_blank"
-                    rel="noreferrer"
+                    rel="noopener noreferrer"
                   >
                     {package_.verificationUrl}
                   </a>
@@ -663,7 +694,7 @@ export function CreatePage({
               <a
                 href={"/stamps/" + package_.stampId}
                 target="_blank"
-                rel="noreferrer"
+                rel="noopener noreferrer"
               >
                 {t("create.openDetails")}
               </a>
@@ -672,9 +703,6 @@ export function CreatePage({
         </section>
       </div>
 
-      <p className="status prominent" role="status" aria-live="polite">
-        {status}
-      </p>
     </section>
   );
 }

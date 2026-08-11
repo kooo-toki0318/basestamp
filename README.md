@@ -77,14 +77,14 @@ Available:
 - browser wallet and Sign in with Base authentication;
 - Base Account authentication through the wallet_connect SIWE capability, with a manual SIWE fallback for injected wallets;
 - Japanese and English UI catalogs with request/browser-language initialization and a persisted explicit selector;
-- a shared handoff story on Home, Create, and Verify with each page role highlighted;
-- explicit wallet-connect and authentication prerequisites on Create;
+- a shared handoff story on Home, Create, and Verify, with Create progress advancing from authentication to recording and sharing;
+- wallet-connect and authentication prompts on Create that disappear as each prerequisite is completed;
 - visible verification URL and copyable localized recipient instructions after recording;
 - clear/replace verification JSON controls and detailed match results;
 - automatic Base Sepolia/Base Mainnet wallet network switching;
 - local previews for common image, video, audio, PDF, and text formats;
 - salted SHA-256 commitments calculated in a browser worker;
-- user-paid Base Sepolia Registry transactions;
+- wallet-confirmed Base Sepolia Registry transactions; BaseStamp does not configure a paymaster, while a wallet may sponsor fees under its own policy;
 - automatic verification-package download;
 - sender-to-recipient JSON handoff;
 - wallet-free recipient verification;
@@ -93,7 +93,7 @@ Available:
 Not available yet:
 
 - Base Mainnet recording;
-- sponsored transactions;
+- BaseStamp-configured sponsored transactions;
 - x402;
 - server-side file or verification-package storage;
 - a public stamp directory.

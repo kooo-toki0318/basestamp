@@ -154,9 +154,11 @@ input:focus-visible {
   gap: 16px 28px;
   margin-bottom: 24px;
   padding: 24px;
-  border: 1px solid rgb(151 104 38 / 32%);
+  border: 1px solid rgb(32 92 69 / 24%);
   border-radius: 22px;
-  background: rgb(255 247 222 / 68%);
+  background:
+    linear-gradient(135deg, rgb(226 244 232 / 74%), rgb(255 255 255 / 58%));
+  box-shadow: 0 18px 44px rgb(32 92 69 / 6%);
 }
 
 .auth-readiness.is-ready {
@@ -253,6 +255,145 @@ input:focus-visible {
   font-weight: 800;
 }
 
+.requirement-badge.is-next {
+  color: #64746d;
+  background: rgb(231 234 229 / 78%);
+}
+
+.authentication-prompt {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  gap: 14px 18px;
+  align-items: center;
+  margin-bottom: 24px;
+  padding: 17px 20px;
+  border: 1px solid rgb(45 98 143 / 24%);
+  border-left: 4px solid #3c7ba7;
+  border-radius: 4px 16px 16px 4px;
+  background: rgb(235 246 255 / 72%);
+}
+
+.authentication-prompt-icon,
+.privacy-warning-icon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.authentication-prompt-icon {
+  color: #fff;
+  background: #3c7ba7;
+}
+
+.authentication-prompt-kicker {
+  margin: 0 0 3px;
+  color: #315a78;
+  font-size: 0.68rem;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.authentication-prompt h2 {
+  margin: 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.2rem;
+  font-weight: 500;
+}
+
+.authentication-prompt div > p:last-child {
+  margin: 5px 0 0;
+  color: #53675e;
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+
+.privacy-warning {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  margin: 0 0 20px;
+  padding: 13px 16px;
+  border-left: 3px solid #a87836;
+  border-radius: 0 12px 12px 0;
+  color: #594a34;
+  background: rgb(255 247 222 / 52%);
+}
+
+.privacy-warning-icon {
+  color: #7a571f;
+  background: rgb(225 195 139 / 34%);
+}
+
+.privacy-warning strong {
+  font-size: 0.82rem;
+}
+
+.privacy-warning p {
+  margin: 3px 0 0;
+  color: #6b604e;
+  font-size: 0.78rem;
+  line-height: 1.55;
+}
+
+.operation-status {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  margin: 0 0 18px;
+  padding: 13px 16px;
+  border: 1px solid rgb(23 44 37 / 14%);
+  border-radius: 14px;
+  background: rgb(255 255 255 / 56%);
+}
+
+.operation-status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #74847d;
+}
+
+.operation-status div > span {
+  color: #6a7b73;
+  font-size: 0.64rem;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.operation-status p {
+  margin: 2px 0 0;
+  color: #314f43;
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.operation-status.is-busy {
+  border-color: rgb(45 98 143 / 24%);
+  background: rgb(235 246 255 / 62%);
+}
+
+.operation-status.is-busy .operation-status-dot {
+  background: #3c7ba7;
+  animation: status-pulse 1.2s ease-in-out infinite;
+}
+
+.operation-status.is-success {
+  border-color: rgb(32 92 69 / 28%);
+  background: rgb(226 244 232 / 68%);
+}
+
+.operation-status.is-success .operation-status-dot {
+  background: #31785b;
+}
+
 .auth-status.pending {
   border-color: rgb(45 98 143 / 24%);
   color: #315a78;
@@ -295,8 +436,28 @@ button.auth-retry {
 }
 
 .completed-result {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   gap: 15px;
   background: rgb(226 244 232 / 68%);
+}
+
+.completed-result > *,
+.share-panel > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.completed-result > button,
+.share-panel > button {
+  width: 100%;
+  padding-inline: 16px;
+}
+
+.completed-result > a,
+.share-message {
+  overflow-wrap: anywhere;
 }
 
 .result-heading,
@@ -321,6 +482,9 @@ button.auth-retry {
 
 .share-panel {
   display: grid;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   gap: 10px;
   padding-top: 14px;
   border-top: 1px solid rgb(23 44 37 / 13%);
@@ -339,6 +503,9 @@ button.auth-retry {
 
 .share-url-row {
   display: grid;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   grid-template-columns: minmax(0, 1fr) 44px;
   align-items: stretch;
   overflow: hidden;
@@ -532,6 +699,23 @@ button.auth-retry {
 
   .auth-readiness-actions > button {
     flex: 1 1 180px;
+  }
+
+  .authentication-prompt {
+    grid-template-columns: 40px minmax(0, 1fr);
+    padding: 16px;
+  }
+
+  .authentication-prompt-action {
+    grid-column: 1 / -1;
+  }
+
+  .authentication-prompt-action button {
+    width: 100%;
+  }
+
+  .privacy-warning {
+    padding-inline: 13px;
   }
 
   .flow-grid > .panel > button,

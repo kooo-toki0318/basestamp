@@ -2,11 +2,13 @@ import { useI18n, type MessageKey } from "../i18n-context";
 
 import {
   isHandoffStepActive,
-  type HandoffRole
+  type HandoffRole,
+  type HandoffStep
 } from "../handoff-role";
 
 type HandoffStoryProperties = {
   activeRole?: HandoffRole;
+  activeStep?: HandoffStep;
   compact?: boolean;
 };
 
@@ -75,6 +77,7 @@ function StepIcon({ index }: { index: number }) {
 
 export function HandoffStory({
   activeRole,
+  activeStep,
   compact = false
 }: HandoffStoryProperties) {
   const { t } = useI18n();
@@ -99,7 +102,12 @@ export function HandoffStory({
         <ol className="handoff-steps">
           {STEPS.map((step, index) => {
             const role = "role" in step ? step.role : undefined;
-            const active = isHandoffStepActive(role, activeRole);
+            const active = isHandoffStepActive(
+              (index + 1) as HandoffStep,
+              role,
+              activeRole,
+              activeStep
+            );
             return (
               <li
                 key={step.number}
