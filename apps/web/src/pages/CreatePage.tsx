@@ -256,6 +256,8 @@ export function CreatePage({
     package_ === undefined
       ? ""
       : t("create.shareMessage", { url: handoffUrl });
+  const webShareAvailable =
+    typeof Reflect.get(navigator, "share") === "function";
 
   async function switchToSelectedNetwork(): Promise<void> {
     setBusy(true);
@@ -849,6 +851,7 @@ export function CreatePage({
               <p className="muted">{t("create.confirmedBody")}</p>
               <button
                 type="button"
+                className="secondary result-download-action"
                 onClick={() => {
                   downloadPackage(package_);
                   setStatus(t("create.status.downloadedAgain"));
@@ -893,40 +896,67 @@ export function CreatePage({
                   {t("create.shareMessageLabel")}
                 </span>
                 <p className="share-message">{shareMessage}</p>
-                <button
-                  type="button"
-                  className="secondary"
-                  onClick={() =>
-                    void copyText(
-                      shareMessage,
-                      "create.status.shareMessageCopied",
-                      "create.status.shareMessageCopyFailed"
-                    )
-                  }
-                >
-                  {t("create.copyShareMessage")}
-                </button>
-                <div className="handoff-share-actions">
+                <div className="share-action-group">
                   <button
                     type="button"
-                    className="secondary"
-                    onClick={() => void shareHandoff()}
+                    className="share-primary-action"
+                    onClick={() =>
+                      void copyText(
+                        shareMessage,
+                        "create.status.shareMessageCopied",
+                        "create.status.shareMessageCopyFailed"
+                      )
+                    }
                   >
-                    {t("create.webShare")}
+                    <span className="share-action-icon" aria-hidden="true">
+                      <svg viewBox="0 0 20 20">
+                        <rect x="6.5" y="6.5" width="9" height="9" rx="1.5" />
+                        <path d="M4.5 13.5h-1A1.5 1.5 0 0 1 2 12V3.5A1.5 1.5 0 0 1 3.5 2H12a1.5 1.5 0 0 1 1.5 1.5v1" />
+                      </svg>
+                    </span>
+                    <span className="share-action-copy">
+                      <strong>{t("create.copyShareMessage")}</strong>
+                      <small>{t("create.copyShareMessageHint")}</small>
+                    </span>
                   </button>
-                  <button
-                    type="button"
-                    className="secondary"
-                    onClick={() => {
-                      setShowShareQr((value) => !value);
-                    }}
-                    aria-expanded={showShareQr}
-                  >
-                    {t(showShareQr ? "create.hideQr" : "create.showQr")}
-                  </button>
+                  <div className="share-secondary-group">
+                    <span>{t("create.moreShareOptions")}</span>
+                    <div className="share-secondary-actions">
+                      {webShareAvailable && (
+                        <button
+                          type="button"
+                          onClick={() => void shareHandoff()}
+                        >
+                          <svg viewBox="0 0 20 20" aria-hidden="true">
+                            <circle cx="15" cy="4" r="2" />
+                            <circle cx="5" cy="10" r="2" />
+                            <circle cx="15" cy="16" r="2" />
+                            <path d="m6.8 9 6.4-3.8M6.8 11l6.4 3.8" />
+                          </svg>
+                          {t("create.webShare")}
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowShareQr((value) => !value);
+                        }}
+                        aria-expanded={showShareQr}
+                        aria-controls="create-handoff-qr"
+                      >
+                        <svg viewBox="0 0 20 20" aria-hidden="true">
+                          <rect x="2.5" y="2.5" width="5" height="5" rx="0.5" />
+                          <rect x="12.5" y="2.5" width="5" height="5" rx="0.5" />
+                          <rect x="2.5" y="12.5" width="5" height="5" rx="0.5" />
+                          <path d="M12.5 12.5h2v2h-2zM15.5 15.5h2v2h-2zM15.5 11.5h2M11.5 15.5v2" />
+                        </svg>
+                        {t(showShareQr ? "create.hideQr" : "create.showQr")}
+                      </button>
+                    </div>
+                  </div>
                 </div>
                 {showShareQr && (
-                  <div className="handoff-qr-panel">
+                  <div className="handoff-qr-panel" id="create-handoff-qr">
                     <QrCode
                       value={handoffUrl}
                       label={t("create.qrLabel")}

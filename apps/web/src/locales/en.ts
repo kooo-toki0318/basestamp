@@ -179,6 +179,8 @@ export const enMessages = {
   "create.shareMessageLabel": "Message to send with the file",
   "create.shareMessage": "Use this private BaseStamp link with the file I sent to check that it matches the version recorded on Base. The link contains a private comparison key, so please do not forward it.\n{url}",
   "create.copyShareMessage": "Copy message and link",
+  "create.copyShareMessageHint": "Copies the recipient note and private link together.",
+  "create.moreShareOptions": "Other ways to share",
   "create.shareText": "Use this private BaseStamp link with the file I sent to check that it matches the recorded version.",
   "create.webShare": "Share",
   "create.showQr": "Show QR",

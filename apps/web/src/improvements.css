@@ -613,6 +613,116 @@ button.auth-retry {
   white-space: pre-line;
 }
 
+.completed-result > button.result-download-action {
+  width: auto;
+  min-height: 40px;
+  justify-self: start;
+  padding-inline: 15px;
+  font-size: 0.78rem;
+}
+
+.share-action-group {
+  display: grid;
+  gap: 9px;
+  margin-top: 2px;
+}
+
+.share-primary-action {
+  display: grid;
+  width: 100%;
+  min-height: 62px;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: center;
+  gap: 11px;
+  padding: 10px 14px;
+  border-radius: 15px;
+  box-shadow: 0 9px 22px rgb(32 92 69 / 16%);
+  text-align: left;
+}
+
+.share-action-icon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 10px;
+  color: #205c45;
+  background: rgb(255 255 255 / 88%);
+}
+
+.share-action-icon svg,
+.share-secondary-actions svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentcolor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.6;
+}
+
+.share-action-copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.share-action-copy strong {
+  font-size: 0.86rem;
+}
+
+.share-action-copy small {
+  color: rgb(248 255 249 / 76%);
+  font-size: 0.69rem;
+  font-weight: 550;
+  line-height: 1.4;
+}
+
+.share-secondary-group {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.share-secondary-group > span {
+  color: #6a7b73;
+  font-size: 0.68rem;
+  font-weight: 750;
+}
+
+.share-secondary-actions {
+  display: flex;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid rgb(23 44 37 / 16%);
+  border-radius: 12px;
+  background: rgb(255 255 255 / 55%);
+}
+
+.share-secondary-actions button {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding-inline: 12px;
+  border: 0;
+  border-radius: 0;
+  color: #315c4b;
+  background: transparent;
+  font-size: 0.72rem;
+}
+
+.share-secondary-actions button + button {
+  border-left: 1px solid rgb(23 44 37 / 13%);
+}
+
+.share-secondary-actions button:hover {
+  background: rgb(190 223 199 / 32%);
+}
+
 .package-loaded {
   display: grid;
   justify-items: start;
@@ -1015,6 +1125,20 @@ button.auth-retry {
   .result-summary > div {
     grid-template-columns: 1fr;
     gap: 4px;
+  }
+
+  .share-secondary-group {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .share-secondary-actions {
+    width: 100%;
+  }
+
+  .share-secondary-actions button {
+    flex: 1 1 0;
   }
 
   .handoff-drop-zone {

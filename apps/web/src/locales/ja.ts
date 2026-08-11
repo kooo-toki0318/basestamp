@@ -181,6 +181,8 @@ export const jaMessages = {
   "create.shareMessageLabel": "ファイルに添える共有文",
   "create.shareMessage": "お送りしたファイルがBaseへ記録した版と一致するか、このBaseStampの非公開リンクから確認できます。リンクには非公開の照合キーが含まれるため、転送しないでください。\n{url}",
   "create.copyShareMessage": "共有文とリンクをコピー",
+  "create.copyShareMessageHint": "受け取り手向けの案内文と非公開リンクをまとめてコピーします。",
+  "create.moreShareOptions": "その他の共有方法",
   "create.shareText": "お送りしたファイルが記録時点と一致するか、このBaseStampの非公開リンクから確認できます。",
   "create.webShare": "共有",
   "create.showQr": "QRを表示",
