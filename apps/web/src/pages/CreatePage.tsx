@@ -3,10 +3,8 @@ import {
   bytesToHex,
   getAddress,
   isAddressEqual,
-  parseEventLogs,
   type Address,
-  type Hex,
-  type TransactionReceipt
+  type Hex
 } from "viem";
 import { useWriteContract } from "wagmi";
 import type { Session } from "../auth-types";
@@ -66,12 +64,20 @@ type PendingConfirmation = {
   creator: Address;
   expectedStampId: Hex;
   prepared: PreparedStamp;
-  transactionHash: Hex;
+  searchFromBlock: bigint;
+  submittedHash: Hex;
 };
 
 const CONFIRMATION_WINDOW_MS = 5 * 60 * 1000;
-const CONFIRMATION_ATTEMPT_MS = 30 * 1000;
-const CONFIRMATION_RETRY_DELAY_MS = 1500;
+const CONFIRMATION_POLL_INTERVAL_MS = 4000;
+
+type ConfirmedRegistryRecord = {
+  blockHash: Hex;
+  blockNumber: bigint;
+  blockTimestamp: bigint;
+  createdAt: bigint;
+  transactionHash: Hex;
+};
 
 type CreatePageProperties = {
   address: Address | undefined;
@@ -122,26 +128,57 @@ function delay(milliseconds: number): Promise<void> {
 }
 
 async function waitForAutomaticConfirmation(
-  transactionHash: Hex
-): Promise<TransactionReceipt> {
+  confirmation: PendingConfirmation,
+  eventMismatchMessage: string
+): Promise<ConfirmedRegistryRecord> {
   const deadline = Date.now() + CONFIRMATION_WINDOW_MS;
   let lastError: unknown;
 
   while (Date.now() < deadline) {
+    let events;
     try {
-      return await baseSepoliaPublicClient.waitForTransactionReceipt({
-        hash: transactionHash,
-        confirmations: 1,
-        // Base Account can return the hash before a public RPC can retrieve
-        // the transaction. Receipt polling avoids treating that indexing gap
-        // as a failed replacement check.
-        checkReplacement: false,
-        timeout: CONFIRMATION_ATTEMPT_MS
+      events = await baseSepoliaPublicClient.getContractEvents({
+        address: BASE_SEPOLIA_DEPLOYMENT.registryAddress,
+        abi: registryAbi,
+        eventName: "StampCreated",
+        args: { stampId: confirmation.expectedStampId },
+        fromBlock: confirmation.searchFromBlock,
+        strict: true
       });
     } catch (error) {
       lastError = error;
-      if (Date.now() >= deadline) break;
-      await delay(CONFIRMATION_RETRY_DELAY_MS);
+      await delay(CONFIRMATION_POLL_INTERVAL_MS);
+      continue;
+    }
+
+    const event = events[0];
+    if (event === undefined) {
+      await delay(CONFIRMATION_POLL_INTERVAL_MS);
+      continue;
+    }
+    if (
+      !isAddressEqual(event.args.creator, confirmation.creator) ||
+      event.args.contentCommitment !==
+        confirmation.prepared.contentCommitment ||
+      event.args.metadataHash !== confirmation.prepared.metadataHash
+    ) {
+      throw new Error(eventMismatchMessage);
+    }
+
+    try {
+      const block = await baseSepoliaPublicClient.getBlock({
+        blockNumber: event.blockNumber
+      });
+      return {
+        blockHash: event.blockHash,
+        blockNumber: event.blockNumber,
+        blockTimestamp: block.timestamp,
+        createdAt: event.args.createdAt,
+        transactionHash: event.transactionHash
+      };
+    } catch (error) {
+      lastError = error;
+      await delay(CONFIRMATION_POLL_INTERVAL_MS);
     }
   }
 
@@ -386,9 +423,10 @@ export function CreatePage({
           metadataHash: prepared.metadataHash,
           stampNonce: stampNonceHex
         });
+        const searchFromBlock = await baseSepoliaPublicClient.getBlockNumber();
 
         setStatus(t("create.status.approveTransaction"));
-        const transactionHash = await writeContractAsync({
+        const submittedHash = await writeContractAsync({
           address: BASE_SEPOLIA_DEPLOYMENT.registryAddress,
           abi: registryAbi,
           functionName: "createStamp",
@@ -405,7 +443,8 @@ export function CreatePage({
           creator: address,
           expectedStampId,
           prepared,
-          transactionHash
+          searchFromBlock,
+          submittedHash
         };
         setPendingConfirmation(activeConfirmation);
       }
@@ -413,41 +452,14 @@ export function CreatePage({
       const {
         creator,
         expectedStampId,
-        prepared: confirmedPrepared,
-        transactionHash
+        prepared: confirmedPrepared
       } = activeConfirmation;
 
       setStatus(t("create.status.waiting"));
-      const receipt = await waitForAutomaticConfirmation(transactionHash);
-      if (receipt.status !== "success") {
-        setPendingConfirmation(undefined);
-        activeConfirmation = undefined;
-        throw new Error(t("create.status.reverted"));
-      }
-
-      const events = parseEventLogs({
-        abi: registryAbi,
-        eventName: "StampCreated",
-        logs: receipt.logs,
-        strict: true
-      });
-      const event = events.find(
-        (candidate) => candidate.args.stampId === expectedStampId
+      const confirmedRecord = await waitForAutomaticConfirmation(
+        activeConfirmation,
+        t("create.status.eventMismatch")
       );
-      if (event === undefined) {
-        throw new Error(t("create.status.missingEvent"));
-      }
-
-      const block = await baseSepoliaPublicClient.getBlock({
-        blockNumber: receipt.blockNumber
-      });
-      if (
-        !isAddressEqual(event.args.creator, creator) ||
-        event.args.contentCommitment !== confirmedPrepared.contentCommitment ||
-        event.args.metadataHash !== confirmedPrepared.metadataHash
-      ) {
-        throw new Error(t("create.status.eventMismatch"));
-      }
 
       const nextPackage: VerificationPackage = {
         schemaVersion: 1,
@@ -457,12 +469,12 @@ export function CreatePage({
         chainId: 84532,
         contractAddress: BASE_SEPOLIA_DEPLOYMENT.registryAddress,
         stampId: expectedStampId,
-        transactionHash,
-        blockNumber: Number(receipt.blockNumber),
-        blockHash: block.hash,
-        blockTimestamp: formatUnixSeconds(block.timestamp),
+        transactionHash: confirmedRecord.transactionHash,
+        blockNumber: Number(confirmedRecord.blockNumber),
+        blockHash: confirmedRecord.blockHash,
+        blockTimestamp: formatUnixSeconds(confirmedRecord.blockTimestamp),
         creator: getAddress(creator),
-        createdAt: formatUnixSeconds(event.args.createdAt),
+        createdAt: formatUnixSeconds(confirmedRecord.createdAt),
         commitment: {
           algorithm: "SHA-256",
           domain: "BaseStamp.Content.v1",
@@ -485,7 +497,7 @@ export function CreatePage({
       if (activeConfirmation !== undefined) {
         setStatus(
           t("create.status.confirmationRetry", {
-            transaction: shortHex(activeConfirmation.transactionHash)
+            transaction: shortHex(activeConfirmation.submittedHash)
           })
         );
       } else {
@@ -783,7 +795,7 @@ export function CreatePage({
                   <a
                     href={
                       "https://sepolia.basescan.org/tx/" +
-                      pendingConfirmation.transactionHash
+                      pendingConfirmation.submittedHash
                     }
                     target="_blank"
                     rel="noopener noreferrer"
