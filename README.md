@@ -79,10 +79,9 @@ Read the detailed [data boundaries](docs/data-boundaries.md),
 [Verified Handoff specification](docs/verified-handoff.md) documents the
 Receipt meaning and signature allowlist.
 
-The manual [Turnstile setup guide](docs/turnstile.md) documents the separate
-public Site Key and Worker Secret Key used by the disabled-by-default
-sponsorship gate. Both the public build flag and Worker flag fail closed by
-default.
+The sponsorship path is disabled by default. Its public build flag and Worker
+flag fail closed independently, and external Cloudflare/CDP resources are
+created manually by the operator.
 
 ## Current release
 
@@ -212,10 +211,9 @@ Use ignored local environment files for development and Cloudflare encrypted
 secrets for deployed Workers. Public browser settings belong in `VITE_*`
 variables and must never contain secret values.
 
-Manual setup and release gates for gas sponsorship are documented in
-[`docs/turnstile.md`](docs/turnstile.md) and
-[`docs/sponsorship.md`](docs/sponsorship.md). BaseStamp does not create
-Turnstile or CDP resources through their APIs.
+BaseStamp does not create Turnstile or CDP resources through their APIs.
+Production sponsorship remains disabled until its operator-run release gate is
+completed.
 
 ### Production Worker authentication
 

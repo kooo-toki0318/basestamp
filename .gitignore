@@ -35,6 +35,8 @@ credentials*.json
 # Private local planning documents
 basestamp_mvp_codex_brief_v*.md
 docs/HANDOFF.md
+docs/sponsorship.md
+docs/turnstile.md
 
 # Foundry build and deployment artifacts
 /cache/
