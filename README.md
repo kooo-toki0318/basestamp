@@ -210,6 +210,11 @@ Use ignored local environment files for development and Cloudflare encrypted
 secrets for deployed Workers. Public browser settings belong in `VITE_*`
 variables and must never contain secret values.
 
+Manual setup and release gates for gas sponsorship are documented in
+[`docs/turnstile.md`](docs/turnstile.md) and
+[`docs/sponsorship.md`](docs/sponsorship.md). BaseStamp does not create
+Turnstile or CDP resources through their APIs.
+
 ### Production Worker authentication
 
 SIWE fails closed unless the deployed Worker has all of the following:

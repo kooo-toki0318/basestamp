@@ -134,7 +134,7 @@ export function requireTurnstileToken(value: unknown): string {
   return value;
 }
 
-async function createWalletSponsorKey(
+export async function createWalletSponsorKey(
   secret: string,
   chainId: number,
   walletAddress: Address

@@ -226,4 +226,59 @@ describe("Core Worker surface", () => {
     });
     expect(turnstileCalled).toBe(true);
   });
+
+  it("routes wallet Paymaster JSON-RPC through the server-side sponsor proxy", async () => {
+    const body = {
+      jsonrpc: "2.0",
+      id: 9,
+      method: "pm_getPaymasterData",
+      params: [{}, "entrypoint", "chain", { claimId: "claim" }]
+    };
+    let proxyCalled = false;
+    const response = await createCoreApp({
+      proxyPaymaster: (_env, request, remoteIp) => {
+        proxyCalled = true;
+        expect(request).toEqual(body);
+        expect(remoteIp).toBe("203.0.113.10");
+        return Promise.resolve({
+          id: 9,
+          result: { paymasterAndData: "0x1234" }
+        });
+      }
+    }).request(
+      "/api/sponsor",
+      {
+        method: "POST",
+        headers: {
+          "CF-Connecting-IP": "203.0.113.10",
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(body)
+      },
+      emptyEnv
+    );
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      jsonrpc: "2.0",
+      id: 9,
+      result: { paymasterAndData: "0x1234" }
+    });
+    expect(proxyCalled).toBe(true);
+  });
+
+  it("fails closed at the Paymaster endpoint while sponsorship is disabled", async () => {
+    const response = await app.request(
+      "/api/sponsor",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}"
+      },
+      configuredEnv
+    );
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "sponsor_unavailable" }
+    });
+  });
 });

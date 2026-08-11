@@ -48,6 +48,10 @@ import {
   verifyTurnstileToken,
   type TurnstileVerifier
 } from "./turnstile";
+import {
+  proxyPaymasterRequest,
+  type ProxyPaymasterResponse
+} from "./paymaster";
 
 const SESSION_COOKIE = "__Host-basestamp_session";
 const NONCE_TTL_SECONDS = 10 * 60;
@@ -100,8 +104,15 @@ type SponsorGrantIssuer = (
   arguments_: Omit<IssueSponsorGrantArguments, "repository">
 ) => Promise<SponsorGrantResponse>;
 
+type SponsorPaymasterProxy = (
+  env: Bindings,
+  request: unknown,
+  remoteIp: string | undefined
+) => Promise<ProxyPaymasterResponse>;
+
 type Dependencies = {
   issueSponsorGrant?: SponsorGrantIssuer;
+  proxyPaymaster?: SponsorPaymasterProxy;
   readHandoffStamp?: (stampId: Hex) => Promise<HandoffStamp>;
   readSession?: SessionReader;
   verifyHandoffSignature?: (
@@ -293,6 +304,10 @@ export function createCoreApp(dependencies: Dependencies = {}) {
         ...arguments_,
         repository: createD1SponsorGrantRepository(env.DB)
       }));
+  const proxySponsorPaymaster: SponsorPaymasterProxy =
+    dependencies.proxyPaymaster ??
+    ((env, request, remoteIp) =>
+      proxyPaymasterRequest({ env, remoteIp, request }));
   const app = new Hono<{ Bindings: Bindings }>();
 
 
@@ -539,6 +554,20 @@ export function createCoreApp(dependencies: Dependencies = {}) {
       walletAddress: getAddress(session.wallet_address)
     });
     return context.json(result);
+  });
+
+  app.post("/api/sponsor", async (context) => {
+    const request = await readJsonObject(context.req.raw);
+    const response = await proxySponsorPaymaster(
+      context.env,
+      request,
+      context.req.header("CF-Connecting-IP")
+    );
+    return context.json({
+      jsonrpc: "2.0",
+      id: response.id,
+      result: response.result
+    });
   });
 
   app.post("/api/handoff/challenge", async (context) => {
