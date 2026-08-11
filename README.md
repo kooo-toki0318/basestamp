@@ -79,9 +79,9 @@ Read the detailed [data boundaries](docs/data-boundaries.md),
 [Verified Handoff specification](docs/verified-handoff.md) documents the
 Receipt meaning and signature allowlist.
 
-The sponsorship path is disabled by default. Its public build flag and Worker
-flag fail closed independently, and external Cloudflare/CDP resources are
-created manually by the operator.
+The sponsorship path has independent public-build and Worker release gates.
+Both are enabled on Base Sepolia for live release validation; external
+Cloudflare/CDP resources are still created manually by the operator.
 
 ## Current release
 
@@ -100,7 +100,7 @@ Available:
 - live connector-chain revalidation before every Registry write, with an explicit switch action when the wallet and selected network differ;
 - local previews for common image, video, audio, PDF, and text formats;
 - salted SHA-256 commitments calculated in a browser worker;
-- wallet-confirmed Base Sepolia Registry transactions, including a disabled-by-default Base Account sponsorship path with an explicit wallet-paid alternative;
+- wallet-confirmed Base Sepolia Registry transactions, including a live-validation Base Account sponsorship path with an explicit wallet-paid alternative;
 - Turnstile-gated, wallet-bound sponsorship grants and a Worker Paymaster proxy with strict UserOperation validation, D1 quotas, and retention cleanup;
 - automatic verification-package download;
 - private fragment handoff URLs with explicit copy, Web Share, and local QR;
@@ -115,7 +115,7 @@ Available:
 Not available yet:
 
 - Base Mainnet recording;
-- production-enabled BaseStamp sponsorship (the code remains fail-closed until Dashboard resources, secrets, migrations, and the release gate are complete);
+- completed real-wallet sponsorship, replay, failure, and Builder attribution validation;
 - x402;
 - server-side file or verification-package storage;
 - a public Handoff Receipt timeline or searchable Receipt index;
@@ -212,8 +212,8 @@ secrets for deployed Workers. Public browser settings belong in `VITE_*`
 variables and must never contain secret values.
 
 BaseStamp does not create Turnstile or CDP resources through their APIs.
-Production sponsorship remains disabled until its operator-run release gate is
-completed.
+Base Sepolia sponsorship is enabled for live release validation only after its
+operator-run resource, secret, migration, and release gates have completed.
 
 ### Production Worker authentication
 
