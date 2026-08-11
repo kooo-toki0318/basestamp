@@ -34,12 +34,47 @@ input:focus-visible {
   letter-spacing: 0.04em;
 }
 
-.story-link {
-  display: inline-flex;
-  align-self: flex-start;
+.handoff-route-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
   margin-top: 20px;
-  font-size: 0.86rem;
+}
+
+.handoff-route-actions a {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 3px 14px;
+  align-items: center;
+  padding: 15px 18px;
+  border: 1px solid rgb(23 44 37 / 14%);
+  border-radius: 16px;
+  background: rgb(255 255 255 / 52%);
+  text-decoration: none;
+  transition: border-color 150ms ease, background 150ms ease;
+}
+
+.handoff-route-actions a:hover {
+  border-color: rgb(32 92 69 / 42%);
+  background: rgb(255 255 255 / 82%);
+}
+
+.handoff-route-actions a > span:first-child {
+  color: #6a7b73;
+  font-size: 0.66rem;
   font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.handoff-route-actions strong {
+  font-size: 0.9rem;
+}
+
+.handoff-route-actions a > span:last-child {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  font-weight: 850;
 }
 
 .handoff-story.compact {
@@ -433,9 +468,13 @@ button.auth-retry {
 }
 
 @media (max-width: 620px) {
+  .handoff-route-actions {
+    grid-template-columns: 1fr;
+  }
+
   .hero {
     gap: 38px;
-    padding-block: 50px 62px;
+    padding-block: 42px 52px;
   }
 
   h1 {

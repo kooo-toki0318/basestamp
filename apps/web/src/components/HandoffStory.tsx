@@ -1,6 +1,9 @@
 import { useI18n, type MessageKey } from "../i18n-context";
 
-type HandoffRole = "create" | "verify";
+import {
+  isHandoffStepActive,
+  type HandoffRole
+} from "../handoff-role";
 
 type HandoffStoryProperties = {
   activeRole?: HandoffRole;
@@ -96,7 +99,7 @@ export function HandoffStory({
         <ol className="handoff-steps">
           {STEPS.map((step, index) => {
             const role = "role" in step ? step.role : undefined;
-            const active = role === activeRole;
+            const active = isHandoffStepActive(role, activeRole);
             return (
               <li
                 key={step.number}
@@ -114,20 +117,27 @@ export function HandoffStory({
                 )}
                 <h3>{t(step.title)}</h3>
                 {!compact && <p>{t(step.body)}</p>}
-                {!compact && role === "create" && (
-                  <a className="story-link" href="/create">
-                    {t("handoff.createCta")}
-                  </a>
-                )}
-                {!compact && role === "verify" && (
-                  <a className="story-link" href="/verify">
-                    {t("handoff.verifyCta")}
-                  </a>
-                )}
               </li>
             );
           })}
         </ol>
+        {!compact && (
+          <nav
+            className="handoff-route-actions"
+            aria-label={t("handoff.actionsAria")}
+          >
+            <a href="/create">
+              <span>{t("handoff.senderRole")}</span>
+              <strong>{t("handoff.createCta")}</strong>
+              <span aria-hidden="true">→</span>
+            </a>
+            <a href="/verify">
+              <span>{t("handoff.recipientRole")}</span>
+              <strong>{t("handoff.verifyCta")}</strong>
+              <span aria-hidden="true">→</span>
+            </a>
+          </nav>
+        )}
       </div>
     </section>
   );

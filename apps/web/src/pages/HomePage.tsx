@@ -59,10 +59,12 @@ export function HomePage() {
       </section>
 
       <section className="technical-story">
-        <div className="shell section-heading technical-heading">
-          <p className="eyebrow">{t("home.technicalEyebrow")}</p>
-          <h2>{t("home.technicalTitle")}</h2>
-          <p>{t("home.technicalIntro")}</p>
+        <div className="shell">
+          <div className="section-heading technical-heading">
+            <p className="eyebrow">{t("home.technicalEyebrow")}</p>
+            <h2>{t("home.technicalTitle")}</h2>
+            <p>{t("home.technicalIntro")}</p>
+          </div>
         </div>
         <div className="shell principles">
           <article>

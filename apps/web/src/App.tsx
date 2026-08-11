@@ -459,6 +459,16 @@ export function App() {
         <nav className="nav-links" aria-label={t("nav.primary")}>
           <a href="/create">{t("nav.create")}</a>
           <a href="/verify">{t("nav.verify")}</a>
+          <a
+            className="github-link"
+            href="https://github.com/kooo-toki0318/basestamp"
+            target="_blank"
+            rel="noreferrer"
+            aria-label={t("nav.githubAria")}
+          >
+            <span>{t("nav.github")}</span>
+            <span aria-hidden="true">↗</span>
+          </a>
         </nav>
         <div className="auth-area">
           {address !== undefined ? (

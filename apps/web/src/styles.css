@@ -77,7 +77,7 @@ a {
   grid-template-columns: 1.25fr 0.75fr;
   gap: clamp(40px, 8vw, 112px);
   align-items: center;
-  padding-block: clamp(72px, 11vw, 150px);
+  padding-block: clamp(52px, 7.5vw, 96px);
 }
 
 .eyebrow,
@@ -426,6 +426,17 @@ a {
   font-size: 0.9rem;
   font-weight: 700;
   text-decoration: none;
+}
+
+.nav-links .github-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #456258;
+}
+
+.nav-links .github-link span:last-child {
+  font-size: 0.72rem;
 }
 
 .nav-links {
