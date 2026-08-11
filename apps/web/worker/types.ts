@@ -3,7 +3,7 @@ type StringBindingKey = {
 }[keyof Env];
 
 export type Bindings = Omit<Env, StringBindingKey> &
-  Partial<Pick<Env, StringBindingKey>>;
+  Partial<Record<StringBindingKey, string>>;
 
 export type AuthConfig = {
   domain: string;

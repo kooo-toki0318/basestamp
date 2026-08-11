@@ -79,6 +79,10 @@ Read the detailed [data boundaries](docs/data-boundaries.md),
 [Verified Handoff specification](docs/verified-handoff.md) documents the
 Receipt meaning and signature allowlist.
 
+The manual [Turnstile setup guide](docs/turnstile.md) documents the separate
+public Site Key and Worker Secret Key used by the disabled-by-default
+sponsorship gate.
+
 ## Current release
 
 The current release targets **Base Sepolia**.

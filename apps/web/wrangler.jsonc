@@ -16,7 +16,9 @@
     "X402_MAINNET_ENABLED": "false",
     "SIWE_ALLOWED_DOMAIN": "basestamp-web.ndun000.workers.dev",
     "SIWE_ALLOWED_ORIGIN": "https://basestamp-web.ndun000.workers.dev",
-    "SIWE_CHAIN_IDS": "84532,8453"
+    "SIWE_CHAIN_IDS": "84532,8453",
+    "SPONSOR_POLICY_VERSION": "1",
+    "TURNSTILE_ALLOWED_HOSTNAMES": "basestamp-web.ndun000.workers.dev"
   },
   "d1_databases": [
     {
@@ -30,6 +32,10 @@
     "enabled": false
   },
   "secrets": {
-    "required": ["SESSION_HASH_SECRET"]
+    "required": [
+      "SESSION_HASH_SECRET",
+      "SPONSOR_ID_HMAC_SECRET",
+      "TURNSTILE_SECRET_KEY"
+    ]
   }
 }

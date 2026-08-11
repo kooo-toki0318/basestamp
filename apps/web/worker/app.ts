@@ -32,6 +32,22 @@ import {
 } from "../src/lib/handoff-signature";
 import { ApiError, assertExactKeys, readJsonObject } from "./http";
 import type { AuthConfig, Bindings } from "./types";
+import {
+  SPONSOR_TURNSTILE_ACTION,
+  type SponsorGrantResponse
+} from "../src/lib/sponsor";
+import {
+  createD1SponsorGrantRepository,
+  getSponsorConfig,
+  issueSponsorGrant,
+  requireSponsorIdempotencyKey,
+  requireTurnstileToken,
+  type IssueSponsorGrantArguments
+} from "./sponsor";
+import {
+  verifyTurnstileToken,
+  type TurnstileVerifier
+} from "./turnstile";
 
 const SESSION_COOKIE = "__Host-basestamp_session";
 const NONCE_TTL_SECONDS = 10 * 60;
@@ -60,14 +76,6 @@ type VerifyHandoffResult = Omit<HandoffVerification, "verified"> & {
   valid: boolean;
 };
 
-type Dependencies = {
-  verifySiweSignature?: (arguments_: VerifyArguments) => Promise<boolean>;
-  readHandoffStamp?: (stampId: Hex) => Promise<HandoffStamp>;
-  verifyHandoffSignature?: (
-    arguments_: VerifyHandoffArguments
-  ) => Promise<VerifyHandoffResult>;
-};
-
 type NonceRow = {
   domain: string;
   chain_id: number;
@@ -79,6 +87,28 @@ type SessionRow = {
   wallet_address: string;
   chain_id: number;
   expires_at: number;
+};
+
+type SessionReader = (
+  env: Bindings,
+  config: AuthConfig,
+  token: string | undefined
+) => Promise<SessionRow | null>;
+
+type SponsorGrantIssuer = (
+  env: Bindings,
+  arguments_: Omit<IssueSponsorGrantArguments, "repository">
+) => Promise<SponsorGrantResponse>;
+
+type Dependencies = {
+  issueSponsorGrant?: SponsorGrantIssuer;
+  readHandoffStamp?: (stampId: Hex) => Promise<HandoffStamp>;
+  readSession?: SessionReader;
+  verifyHandoffSignature?: (
+    arguments_: VerifyHandoffArguments
+  ) => Promise<VerifyHandoffResult>;
+  verifySiweSignature?: (arguments_: VerifyArguments) => Promise<boolean>;
+  verifyTurnstile?: TurnstileVerifier;
 };
 
 type HandoffChallengeRow = {
@@ -253,6 +283,16 @@ export function createCoreApp(dependencies: Dependencies = {}) {
     dependencies.readHandoffStamp ?? defaultReadHandoffStamp;
   const verifyHandoffSignature =
     dependencies.verifyHandoffSignature ?? defaultVerifyHandoffSignature;
+  const readSessionForRequest = dependencies.readSession ?? readSession;
+  const verifyTurnstile =
+    dependencies.verifyTurnstile ?? verifyTurnstileToken;
+  const issueGrant: SponsorGrantIssuer =
+    dependencies.issueSponsorGrant ??
+    ((env, arguments_) =>
+      issueSponsorGrant({
+        ...arguments_,
+        repository: createD1SponsorGrantRepository(env.DB)
+      }));
   const app = new Hono<{ Bindings: Bindings }>();
 
 
@@ -438,7 +478,7 @@ export function createCoreApp(dependencies: Dependencies = {}) {
   app.get("/api/session", async (context) => {
     const config = getAuthConfig(context.env);
     const token = getCookie(context, SESSION_COOKIE);
-    const session = await readSession(context.env, config, token);
+    const session = await readSessionForRequest(context.env, config, token);
     if (session === null) return context.json({ authenticated: false });
 
     return context.json({
@@ -449,6 +489,58 @@ export function createCoreApp(dependencies: Dependencies = {}) {
     });
   });
 
+  app.post("/api/sponsor/grant", async (context) => {
+    const sponsorConfig = getSponsorConfig(context.env);
+    const authConfig = getAuthConfig(context.env);
+    requireOrigin(context.req.raw, authConfig);
+    const body = await readJsonObject(context.req.raw);
+    assertExactKeys(body, ["chainId", "idempotencyKey", "turnstileToken"]);
+    if (body.chainId !== BASE_SEPOLIA_DEPLOYMENT.chainId) {
+      throw new ApiError(
+        400,
+        "unsupported_chain",
+        "Base Sepolia sponsorship is required."
+      );
+    }
+    const idempotencyKey = requireSponsorIdempotencyKey(body.idempotencyKey);
+    const turnstileToken = requireTurnstileToken(body.turnstileToken);
+    const session = await readSessionForRequest(
+      context.env,
+      authConfig,
+      getCookie(context, SESSION_COOKIE)
+    );
+    if (session === null) {
+      throw new ApiError(
+        403,
+        "authentication_required",
+        "Authentication is required."
+      );
+    }
+    if (session.chain_id !== BASE_SEPOLIA_DEPLOYMENT.chainId) {
+      throw new ApiError(
+        400,
+        "unsupported_chain",
+        "Base Sepolia authentication is required."
+      );
+    }
+
+    const result = await issueGrant(context.env, {
+      action: SPONSOR_TURNSTILE_ACTION,
+      chainId: BASE_SEPOLIA_DEPLOYMENT.chainId,
+      config: sponsorConfig,
+      idempotencyKey,
+      verifyHuman: () =>
+        verifyTurnstile({
+          allowedHostnames: sponsorConfig.allowedHostnames,
+          remoteIp: context.req.header("CF-Connecting-IP"),
+          secret: sponsorConfig.turnstileSecret,
+          token: turnstileToken
+        }),
+      walletAddress: getAddress(session.wallet_address)
+    });
+    return context.json(result);
+  });
+
   app.post("/api/handoff/challenge", async (context) => {
     const config = getAuthConfig(context.env);
     requireOrigin(context.req.raw, config);
@@ -456,7 +548,7 @@ export function createCoreApp(dependencies: Dependencies = {}) {
     assertExactKeys(body, ["stampId"]);
     const stampId = requireBytes32(body.stampId, "Stamp ID");
 
-    const session = await readSession(
+    const session = await readSessionForRequest(
       context.env,
       config,
       getCookie(context, SESSION_COOKIE)
@@ -515,7 +607,7 @@ export function createCoreApp(dependencies: Dependencies = {}) {
     const ackNonce = requireBytes32(body.ackNonce, "Acknowledgement nonce");
     const signature = requireHandoffSignature(body.signature);
 
-    const session = await readSession(
+    const session = await readSessionForRequest(
       context.env,
       config,
       getCookie(context, SESSION_COOKIE)

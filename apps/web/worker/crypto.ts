@@ -13,8 +13,21 @@ export async function sha256Hex(value: string): Promise<string> {
 
 export async function hmacSha256Hex(
   secret: string,
-  value: string
+  value: string | Uint8Array
 ): Promise<string> {
+  return toHex(
+    await hmacSha256(
+      secret,
+      typeof value === "string" ? encoder.encode(value) : value
+    )
+  );
+}
+
+export async function hmacSha256(
+  secret: string,
+  value: Uint8Array
+): Promise<Uint8Array> {
+  const input = new Uint8Array(value);
   const key = await crypto.subtle.importKey(
     "raw",
     encoder.encode(secret),
@@ -22,8 +35,8 @@ export async function hmacSha256Hex(
     false,
     ["sign"]
   );
-  const digest = await crypto.subtle.sign("HMAC", key, encoder.encode(value));
-  return toHex(new Uint8Array(digest));
+  const digest = await crypto.subtle.sign("HMAC", key, input);
+  return new Uint8Array(digest);
 }
 
 export function randomHex32(): Hex {

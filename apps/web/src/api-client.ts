@@ -17,6 +17,11 @@ const API_ERROR_KEYS: Readonly<Record<string, MessageKey>> = {
   not_found: "api.notFound",
   origin_rejected: "api.originRejected",
   payload_too_large: "api.payloadTooLarge",
+  invalid_sponsor_request: "api.invalidSponsorRequest",
+  sponsor_not_configured: "api.sponsorNotConfigured",
+  sponsor_request_conflict: "api.sponsorRequestConflict",
+  sponsor_unavailable: "api.sponsorUnavailable",
+  turnstile_rejected: "api.turnstileRejected",
   unsupported_chain: "api.unsupportedChain",
   unsupported_media_type: "api.invalidRequest"
 };

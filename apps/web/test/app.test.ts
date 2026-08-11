@@ -10,6 +10,14 @@ const configuredEnv = {
   SIWE_CHAIN_IDS: "84532,8453",
   SESSION_HASH_SECRET: "x".repeat(32)
 } as unknown as Bindings;
+const sponsorEnv = {
+  ...configuredEnv,
+  SPONSOR_ENABLED: "true",
+  SPONSOR_POLICY_VERSION: "1",
+  SPONSOR_ID_HMAC_SECRET: "i".repeat(32),
+  TURNSTILE_ALLOWED_HOSTNAMES: "basestamp-web.ndun000.workers.dev",
+  TURNSTILE_SECRET_KEY: "t".repeat(32)
+} as Bindings;
 
 describe("Core Worker surface", () => {
   it("serves a no-store health response with security headers", async () => {
@@ -101,5 +109,121 @@ describe("Core Worker surface", () => {
     await expect(response.json()).resolves.toMatchObject({
       error: { code: "auth_not_configured" }
     });
+  });
+
+  it("fails closed before Siteverify when sponsorship is disabled", async () => {
+    let turnstileCalled = false;
+    const response = await createCoreApp({
+      verifyTurnstile: () => {
+        turnstileCalled = true;
+        return Promise.resolve();
+      }
+    }).request(
+      "/api/sponsor/grant",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Origin: "http://localhost:5173"
+        },
+        body: JSON.stringify({
+          chainId: 84532,
+          idempotencyKey: "123e4567-e89b-42d3-a456-426614174000",
+          turnstileToken: "token"
+        })
+      },
+      configuredEnv
+    );
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "sponsor_unavailable" }
+    });
+    expect(turnstileCalled).toBe(false);
+  });
+
+  it("requires a session before redeeming a Turnstile token", async () => {
+    let turnstileCalled = false;
+    const response = await createCoreApp({
+      readSession: () => Promise.resolve(null),
+      verifyTurnstile: () => {
+        turnstileCalled = true;
+        return Promise.resolve();
+      }
+    }).request(
+      "/api/sponsor/grant",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Origin: "http://localhost:5173"
+        },
+        body: JSON.stringify({
+          chainId: 84532,
+          idempotencyKey: "123e4567-e89b-42d3-a456-426614174000",
+          turnstileToken: "token"
+        })
+      },
+      sponsorEnv
+    );
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "authentication_required" }
+    });
+    expect(turnstileCalled).toBe(false);
+  });
+
+  it("binds a verified Turnstile token to the authenticated Sepolia wallet grant", async () => {
+    const walletAddress = "0x1111111111111111111111111111111111111111";
+    let turnstileCalled = false;
+    const response = await createCoreApp({
+      readSession: () =>
+        Promise.resolve({
+          wallet_address: walletAddress,
+          chain_id: 84532,
+          expires_at: 1_786_492_800
+        }),
+      verifyTurnstile: (verification) => {
+        turnstileCalled = true;
+        expect(verification.token).toBe("valid-turnstile-token");
+        expect(verification.remoteIp).toBe("203.0.113.10");
+        expect(verification.allowedHostnames.has(
+          "basestamp-web.ndun000.workers.dev"
+        )).toBe(true);
+        return Promise.resolve();
+      },
+      issueSponsorGrant: async (_env, arguments_) => {
+        expect(arguments_.walletAddress.toLowerCase()).toBe(walletAddress);
+        expect(arguments_.chainId).toBe(84532);
+        await arguments_.verifyHuman();
+        return {
+          claimId: "65e41858-cd5e-4c75-b9e4-9a772d748949",
+          expiresAt: "2026-08-11T08:15:00Z",
+          grantToken: "g".repeat(43)
+        };
+      }
+    }).request(
+      "/api/sponsor/grant",
+      {
+        method: "POST",
+        headers: {
+          "CF-Connecting-IP": "203.0.113.10",
+          "Content-Type": "application/json",
+          Origin: "http://localhost:5173"
+        },
+        body: JSON.stringify({
+          chainId: 84532,
+          idempotencyKey: "123e4567-e89b-42d3-a456-426614174000",
+          turnstileToken: "valid-turnstile-token"
+        })
+      },
+      sponsorEnv
+    );
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      claimId: "65e41858-cd5e-4c75-b9e4-9a772d748949",
+      expiresAt: "2026-08-11T08:15:00Z",
+      grantToken: "g".repeat(43)
+    });
+    expect(turnstileCalled).toBe(true);
   });
 });
