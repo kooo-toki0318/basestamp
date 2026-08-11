@@ -11,7 +11,7 @@
   "vars": {
     "APP_ENV": "production",
     "MAINNET_WRITES_ENABLED": "false",
-    "SPONSOR_ENABLED": "false",
+    "SPONSOR_ENABLED": "true",
     "X402_TESTNET_ENABLED": "false",
     "X402_MAINNET_ENABLED": "false",
     "SIWE_ALLOWED_DOMAIN": "basestamp-web.ndun000.workers.dev",
@@ -35,7 +35,13 @@
     "enabled": false
   },
   "secrets": {
-    // Sponsorship secrets become required as part of its explicit release gate.
-    "required": ["SESSION_HASH_SECRET"]
+    "required": [
+      "SESSION_HASH_SECRET",
+      "BASE_BUILDER_CODE",
+      "CDP_PAYMASTER_URL",
+      "IP_BUCKET_HMAC_SECRET",
+      "SPONSOR_ID_HMAC_SECRET",
+      "TURNSTILE_SECRET_KEY"
+    ]
   }
 }
