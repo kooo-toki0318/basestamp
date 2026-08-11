@@ -16,7 +16,7 @@ type TurnstileApi = {
       "error-callback"(): void;
       "expired-callback"(): void;
       sitekey: string;
-      size: "flexible";
+      size: "compact" | "flexible";
       theme: "auto";
       "timeout-callback"(): void;
     }
@@ -104,33 +104,61 @@ export function TurnstileWidget({
     let disposed = false;
     let widgetId: string | undefined;
     let api: TurnstileApi | undefined;
+    let renderedSize: "compact" | "flexible" | undefined;
+    let resizeObserver: ResizeObserver | undefined;
     onTokenChange(undefined);
+
+    const renderWidget = (
+      loadedApi: TurnstileApi,
+      container: HTMLElement,
+      size: "compact" | "flexible"
+    ) => {
+      if (widgetId !== undefined) loadedApi.remove(widgetId);
+      onTokenChange(undefined);
+      renderedSize = size;
+      widgetId = loadedApi.render(container, {
+        action: SPONSOR_TURNSTILE_ACTION,
+        appearance: "interaction-only",
+        callback: (token) => {
+          onTokenChange(token);
+        },
+        "error-callback": () => {
+          onTokenChange(undefined);
+          onError();
+        },
+        "expired-callback": () => {
+          onTokenChange(undefined);
+        },
+        sitekey: siteKey,
+        size,
+        theme: "auto",
+        "timeout-callback": () => {
+          onTokenChange(undefined);
+        }
+      });
+    };
 
     void loadTurnstile()
       .then((loadedApi) => {
         const container = containerReference.current;
         if (disposed || container === null) return;
         api = loadedApi;
-        widgetId = loadedApi.render(container, {
-          action: SPONSOR_TURNSTILE_ACTION,
-          appearance: "interaction-only",
-          callback: (token) => {
-            onTokenChange(token);
-          },
-          "error-callback": () => {
-            onTokenChange(undefined);
-            onError();
-          },
-          "expired-callback": () => {
-            onTokenChange(undefined);
-          },
-          sitekey: siteKey,
-          size: "flexible",
-          theme: "auto",
-          "timeout-callback": () => {
-            onTokenChange(undefined);
-          }
-        });
+        const size = container.getBoundingClientRect().width < 300
+          ? "compact"
+          : "flexible";
+        renderWidget(loadedApi, container, size);
+        if (typeof ResizeObserver !== "undefined") {
+          resizeObserver = new ResizeObserver(([entry]) => {
+            if (disposed || entry === undefined) return;
+            const nextSize = entry.contentRect.width < 300
+              ? "compact"
+              : "flexible";
+            if (nextSize !== renderedSize) {
+              renderWidget(loadedApi, container, nextSize);
+            }
+          });
+          resizeObserver.observe(container);
+        }
       })
       .catch(() => {
         if (!disposed) onError();
@@ -138,6 +166,7 @@ export function TurnstileWidget({
 
     return () => {
       disposed = true;
+      resizeObserver?.disconnect();
       onTokenChange(undefined);
       if (api !== undefined && widgetId !== undefined) {
         api.remove(widgetId);

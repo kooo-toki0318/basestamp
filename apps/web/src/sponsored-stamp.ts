@@ -1,10 +1,11 @@
-import type { Address, Hex } from "viem";
+import { concatHex, encodeFunctionData, type Address, type Hex } from "viem";
 import { BASE_SEPOLIA_DEPLOYMENT } from "./lib/deployment";
 import { registryAbi } from "./lib/registry";
 import type { SponsorGrantResponse } from "./lib/sponsor";
 
 export type SponsoredStampCallArguments = {
   account: Address;
+  builderDataSuffix: Hex;
   contentCommitment: Hex;
   grant: SponsorGrantResponse;
   metadataHash: Hex;
@@ -21,13 +22,18 @@ export function createSponsoredStampCall(
     calls: [
       {
         to: BASE_SEPOLIA_DEPLOYMENT.registryAddress,
-        abi: registryAbi,
-        functionName: "createStamp" as const,
-        args: [
-          arguments_.contentCommitment,
-          arguments_.metadataHash,
-          arguments_.stampNonce
-        ] as const
+        data: concatHex([
+          encodeFunctionData({
+            abi: registryAbi,
+            functionName: "createStamp",
+            args: [
+              arguments_.contentCommitment,
+              arguments_.metadataHash,
+              arguments_.stampNonce
+            ]
+          }),
+          arguments_.builderDataSuffix
+        ])
       }
     ] as const,
     capabilities: {

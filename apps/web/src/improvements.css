@@ -477,9 +477,12 @@ input:focus-visible {
 }
 
 .turnstile-widget {
+  display: flex;
+  justify-content: center;
+  min-width: 0;
   width: 100%;
   max-width: 100%;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .sponsor-choice .sponsor-ready {

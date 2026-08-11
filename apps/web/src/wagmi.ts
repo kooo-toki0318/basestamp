@@ -1,20 +1,10 @@
 import { QueryClient } from "@tanstack/react-query";
-import { Attribution } from "ox/erc8021";
 import { createConfig, http } from "wagmi";
 import { base, baseSepolia } from "wagmi/chains";
 import { baseAccount, injected } from "wagmi/connectors";
 import { BASE_SEPOLIA_DEPLOYMENT } from "./lib/deployment";
 
 export const queryClient = new QueryClient();
-
-const builderCode = import.meta.env.VITE_BASE_BUILDER_CODE?.trim() ?? "";
-const dataSuffix =
-  builderCode === ""
-    ? undefined
-    : {
-        required: true,
-        value: Attribution.toDataSuffix({ codes: [builderCode] })
-      };
 
 export const wagmiConfig = createConfig({
   chains: [base, baseSepolia],
@@ -26,8 +16,7 @@ export const wagmiConfig = createConfig({
   transports: {
     [base.id]: http(),
     [baseSepolia.id]: http(BASE_SEPOLIA_DEPLOYMENT.rpcUrl)
-  },
-  ...(dataSuffix === undefined ? {} : { dataSuffix })
+  }
 });
 
 declare module "wagmi" {

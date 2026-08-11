@@ -1,4 +1,8 @@
 import { postJson } from "./api-client";
+import {
+  createBuilderAttribution,
+  type BuilderAttribution
+} from "./builder-attribution";
 import type { Translate } from "./i18n-context";
 import {
   createSponsorIdempotencyKey,
@@ -30,6 +34,10 @@ export function requestSponsorGrant(
 export function readTurnstileSiteKey(): string | undefined {
   const siteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY?.trim() ?? "";
   return siteKey === "" ? undefined : siteKey;
+}
+
+export function readBuilderAttribution(): BuilderAttribution | undefined {
+  return createBuilderAttribution(import.meta.env.VITE_BASE_BUILDER_CODE);
 }
 
 export function readSponsorshipEnabled(): boolean {

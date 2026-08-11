@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   bytesToHex,
+  concatHex,
+  encodeFunctionData,
   getAddress,
   isAddressEqual,
   type Address,
   type Hex
 } from "viem";
-import { useSendCalls, useWriteContract } from "wagmi";
+import { useSendCalls, useSendTransaction } from "wagmi";
 import type { Session } from "../auth-types";
 import { useI18n, type MessageKey } from "../i18n-context";
 import { localeTag } from "../locale";
@@ -51,6 +53,7 @@ import {
   type SponsorGrantResponse
 } from "../lib/sponsor";
 import {
+  readBuilderAttribution,
   readSponsorshipEnabled,
   readTurnstileSiteKey,
   requestSponsorGrant
@@ -234,12 +237,13 @@ export function CreatePage({
   const [sponsorIdempotencyKey, setSponsorIdempotencyKey] = useState(
     createSponsorIdempotencyKey
   );
-  const { mutateAsync: writeContractAsync } = useWriteContract();
+  const { mutateAsync: sendTransactionAsync } = useSendTransaction();
   const { mutateAsync: sendCallsAsync } = useSendCalls();
   const selectedNetwork = getBaseNetwork(selectedChainId);
   const registryAvailable = selectedChainId === 84532;
   const turnstileSiteKey = readTurnstileSiteKey();
   const sponsorshipEnabled = readSponsorshipEnabled();
+  const builderAttribution = readBuilderAttribution();
   useEffect(() => {
     const source = readLatestCreatedVerificationPackage();
     if (source === undefined) return;
@@ -269,7 +273,8 @@ export function CreatePage({
     sponsorshipEnabled &&
     registryAvailable &&
     connectorId === "baseAccount" &&
-    turnstileSiteKey !== undefined;
+    turnstileSiteKey !== undefined &&
+    builderAttribution !== undefined;
   const fundingMode = getCreateFundingMode(
     sponsorshipAvailable,
     walletFeeChosen
@@ -488,6 +493,11 @@ export function CreatePage({
         let submittedHash: Hex | undefined;
         let submittedReference: string;
         if (fundingMode === "sponsored") {
+          if (builderAttribution === undefined) {
+            throw new Error(t("create.status.sponsorFailed", {
+              message: t("api.sponsorNotConfigured")
+            }));
+          }
           let activeGrant = sponsorGrant;
           if (activeGrant === undefined) {
             if (turnstileToken === undefined) {
@@ -508,6 +518,7 @@ export function CreatePage({
           setStatus(t("create.status.approveSponsoredTransaction"));
           const submittedCalls = await sendCallsAsync(createSponsoredStampCall({
             account: address,
+            builderDataSuffix: builderAttribution.dataSuffix,
             contentCommitment: prepared.contentCommitment,
             grant: activeGrant,
             metadataHash: prepared.metadataHash,
@@ -517,17 +528,19 @@ export function CreatePage({
           submittedReference = submittedCalls.id;
         } else {
           setStatus(t("create.status.approveTransaction"));
-          submittedHash = await writeContractAsync({
-            address: BASE_SEPOLIA_DEPLOYMENT.registryAddress,
+          const registryCall = encodeFunctionData({
             abi: registryAbi,
             functionName: "createStamp",
-            args: [
-              prepared.contentCommitment,
-              prepared.metadataHash,
-              stampNonceHex
-            ],
+            args: [prepared.contentCommitment, prepared.metadataHash, stampNonceHex]
+          });
+          submittedHash = await sendTransactionAsync({
             account: address,
-            chainId: BASE_SEPOLIA_DEPLOYMENT.chainId
+            chainId: BASE_SEPOLIA_DEPLOYMENT.chainId,
+            data:
+              builderAttribution === undefined
+                ? registryCall
+                : concatHex([registryCall, builderAttribution.dataSuffix]),
+            to: BASE_SEPOLIA_DEPLOYMENT.registryAddress
           });
           submittedReference = submittedHash;
         }
