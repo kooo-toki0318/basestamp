@@ -54,27 +54,29 @@ describe("Core D1 cleanup", () => {
     const fixture = createCleanupDatabase();
     await runCoreCleanup(fixture.database, now);
 
-    expect(fixture.captured).toHaveLength(12);
-    expect(fixture.getBatched()).toHaveLength(12);
-    expect(fixture.captured[0]).toMatchObject({
+    expect(fixture.captured).toHaveLength(14);
+    expect(fixture.getBatched()).toHaveLength(14);
+    expect(fixture.captured[0]?.sql).toContain("rate_limit_buckets");
+    expect(fixture.captured[1]?.sql).toContain("sponsor:global:day:");
+    expect(fixture.captured[2]?.sql).toContain("sponsor:wallet:month:");
+    expect(fixture.captured[3]).toMatchObject({
       bindings: [now - 300]
     });
-    expect(fixture.captured[0]?.sql).toContain("status = 'requested'");
-    expect(fixture.captured[1]?.sql).toContain("status = 'expired'");
-    expect(fixture.captured[2]).toMatchObject({
+    expect(fixture.captured[3]?.sql).toContain("status = 'requested'");
+    expect(fixture.captured[4]?.sql).toContain("status = 'expired'");
+    expect(fixture.captured[5]).toMatchObject({
       bindings: [now - 30 * 86_400]
     });
-    expect(fixture.captured[2]?.sql).toContain("status = 'marker'");
-    expect(fixture.captured[4]).toMatchObject({
+    expect(fixture.captured[6]).toMatchObject({
       bindings: [now - 2 * 86_400]
     });
-    expect(fixture.captured[6]).toMatchObject({
+    expect(fixture.captured[8]).toMatchObject({
       bindings: [now - 7 * 86_400]
     });
-    expect(fixture.captured[8]).toMatchObject({ bindings: [now] });
-    expect(fixture.captured[9]?.sql).toContain("+62 days");
-    expect(fixture.captured[10]?.sql).toContain("sponsor_wallet_allowlist");
-    expect(fixture.captured[11]).toMatchObject({
+    expect(fixture.captured[10]).toMatchObject({ bindings: [now] });
+    expect(fixture.captured[11]?.sql).toContain("+62 days");
+    expect(fixture.captured[12]?.sql).toContain("sponsor_wallet_allowlist");
+    expect(fixture.captured[13]).toMatchObject({
       bindings: ["system:cleanup:last_success", now, now]
     });
   });

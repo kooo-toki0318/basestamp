@@ -1039,6 +1039,21 @@ export function CreatePage({
                 <strong>{t("create.confirmedTitle")}</strong>
               </div>
               <p className="muted">{t("create.confirmedBody")}</p>
+              <div className="result-transaction">
+                <span>{t("create.transactionHash")}</span>
+                <a
+                  href={
+                    BASE_SEPOLIA_DEPLOYMENT.explorerUrl +
+                    "/tx/" +
+                    package_.transactionHash
+                  }
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <code>{package_.transactionHash}</code>
+                  <span aria-hidden="true">↗</span>
+                </a>
+              </div>
               <button
                 type="button"
                 className="secondary result-download-action"

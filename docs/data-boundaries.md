@@ -56,8 +56,8 @@ stamps; `stamp_refs` is only short-lived UI reference state.
 The eighth table is a reviewed exception to the original seven-table boundary:
 `sponsor_wallet_allowlist` contains only a lowercase Base Sepolia test-wallet
 address, fixed chain and action, and creation/expiry timestamps. It exists so a
-small number of operator-owned test wallets can bypass the lifetime sponsor
-slot without weakening Turnstile, call validation, or daily quotas. It cannot
+small number of operator-owned test wallets can bypass the monthly wallet
+quota without weakening Turnstile, call validation, or daily quotas. It cannot
 contain notes or user-supplied text, has no Mainnet chain option, and expired
 rows are removed by scheduled cleanup. Production users must never be added.
 
@@ -75,11 +75,11 @@ Core retention is enforced hourly:
 | HMAC IP buckets | Until their fixed expiry, at most 48 hours |
 | Test-wallet allowlist | Until its mandatory expiry |
 
-After 30 days, a successful sponsor claim is reduced to its versioned HMAC
-wallet marker, chain, action, policy version, and sponsorship time. That marker
-is retained only while the sponsor program operates and is not treated as
-anonymous data. `/api/health/retention` reports whether the hourly cleanup has
-succeeded within its two-hour service window.
+After 30 days, a successful sponsor claim is removed. The HMAC wallet quota is
+kept only in its monthly aggregate counter, which is removed no later than 62
+days after that UTC month ends and is not treated as anonymous data.
+`/api/health/retention` reports whether the hourly cleanup has succeeded within
+its two-hour service window.
 
 ## External systems
 

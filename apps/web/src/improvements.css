@@ -596,6 +596,36 @@ button.auth-retry {
   gap: 10px;
 }
 
+.result-transaction {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid rgb(23 44 37 / 12%);
+  border-radius: 11px;
+  background: rgb(255 255 255 / 58%);
+}
+
+.result-transaction > span {
+  color: #5d6f67;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.result-transaction > a {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 0.7rem;
+  line-height: 1.45;
+}
+
+.result-transaction code {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .result-check,
 .verification-result-heading > span {
   display: grid;

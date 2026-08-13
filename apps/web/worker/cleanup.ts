@@ -47,9 +47,39 @@ export async function runCoreCleanup(
 
   await database.batch([
     database.prepare(
+      "UPDATE rate_limit_buckets SET count = max(0, count - (" +
+        "SELECT count(*) FROM sponsor_claims WHERE status = 'requested' " +
+        "AND requested_at <= ? AND request_ip_bucket_key = bucket_key)), " +
+        "updated_at = ? WHERE EXISTS (SELECT 1 FROM sponsor_claims " +
+        "WHERE status = 'requested' AND requested_at <= ? " +
+        "AND request_ip_bucket_key = bucket_key)"
+    ).bind(staleRequestCutoff, now, staleRequestCutoff),
+    database.prepare(
+      "UPDATE quota_counters SET count = max(0, count - (" +
+        "SELECT count(*) FROM sponsor_claims WHERE status = 'requested' " +
+        "AND requested_at <= ? AND counter_key = 'sponsor:global:day:' " +
+        "|| request_day_start)), updated_at = ? WHERE period_kind = 'day' " +
+        "AND EXISTS (SELECT 1 FROM sponsor_claims WHERE status = 'requested' " +
+        "AND requested_at <= ? AND counter_key = 'sponsor:global:day:' " +
+        "|| request_day_start)"
+    ).bind(staleRequestCutoff, now, staleRequestCutoff),
+    database.prepare(
+      "UPDATE quota_counters SET count = max(0, count - (" +
+        "SELECT count(*) FROM sponsor_claims WHERE status = 'requested' " +
+        "AND requested_at <= ? AND reserved_wallet_key IS NOT NULL " +
+        "AND counter_key = 'sponsor:wallet:month:' || request_month_start " +
+        "|| ':' || reserved_wallet_key)), updated_at = ? " +
+        "WHERE period_kind = 'month' AND EXISTS (SELECT 1 " +
+        "FROM sponsor_claims WHERE status = 'requested' " +
+        "AND requested_at <= ? AND reserved_wallet_key IS NOT NULL " +
+        "AND counter_key = 'sponsor:wallet:month:' || request_month_start " +
+        "|| ':' || reserved_wallet_key)"
+    ).bind(staleRequestCutoff, now, staleRequestCutoff),
+    database.prepare(
       "UPDATE sponsor_claims SET status = 'grant_issued', " +
         "reserved_wallet_key = NULL, request_ip_bucket_key = NULL, " +
-        "request_day_start = NULL, request_method = NULL, " +
+        "request_day_start = NULL, request_month_start = NULL, " +
+        "request_method = NULL, " +
         "request_fingerprint_hash = NULL, requested_at = NULL, " +
         "wallet_lifetime_bypassed = 0 " +
         "WHERE status = 'requested' AND requested_at <= ?"
@@ -59,19 +89,6 @@ export async function runCoreCleanup(
         "terminal_at = grant_expires_at " +
         "WHERE status = 'grant_issued' AND grant_expires_at <= ?"
     ).bind(now),
-    database.prepare(
-      "UPDATE sponsor_claims SET status = 'marker', grant_wallet_key = NULL, " +
-        "idempotency_key_hash = NULL, grant_token_hash = NULL, " +
-        "grant_expires_at = NULL, turnstile_verified_at = NULL, " +
-        "provider_reference_hash = NULL, provider_response_json = NULL, " +
-        "reserved_wallet_key = NULL, request_ip_bucket_key = NULL, " +
-        "request_day_start = NULL, request_method = NULL, " +
-        "request_fingerprint_hash = NULL, requested_at = NULL, " +
-        "stub_fingerprint_hash = NULL, stub_response_json = NULL, " +
-        "wallet_lifetime_bypassed = 0, terminal_at = NULL " +
-        "WHERE status = 'sponsored' AND wallet_sponsor_key IS NOT NULL " +
-        "AND terminal_at <= ?"
-    ).bind(sponsorTransientCutoff),
     database.prepare(
       "DELETE FROM sponsor_claims WHERE wallet_sponsor_key IS NULL " +
         "AND terminal_at IS NOT NULL AND terminal_at <= ?"

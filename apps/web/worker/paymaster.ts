@@ -69,7 +69,7 @@ export type SponsorProxyRepository = {
   }): Promise<void>;
   deny(claimId: string, now: number): Promise<void>;
   findClaim(claimId: string): Promise<SponsorClaim | null>;
-  isWalletLifetimeBypassed(arguments_: {
+  isWalletQuotaBypassed(arguments_: {
     action: string;
     chainId: number;
     now: number;
@@ -84,9 +84,10 @@ export type SponsorProxyRepository = {
     grantWalletKey: string;
     ipBucketKey: string;
     method: ValidatedPaymasterRequest["method"];
+    monthStart: number;
     now: number;
     policyVersion: number;
-    walletLifetimeBypassed: boolean;
+    walletQuotaBypassed: boolean;
   }): Promise<void>;
 };
 
@@ -437,6 +438,13 @@ function claimIsAuthorized(
   );
 }
 
+export function utcMonthStart(now: number): number {
+  const date = new Date(now * 1_000);
+  return Math.floor(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1) / 1_000
+  );
+}
+
 export async function proxyPaymasterRequest(
   arguments_: ProxyPaymasterArguments
 ): Promise<ProxyPaymasterResponse> {
@@ -444,6 +452,7 @@ export async function proxyPaymasterRequest(
   const request = validatePaymasterRequest(arguments_.request, config.builderCode);
   const now = arguments_.now ?? Math.floor(Date.now() / 1_000);
   const dayStart = Math.floor(now / 86_400) * 86_400;
+  const monthStart = utcMonthStart(now);
   const repository =
     arguments_.repository ?? createD1SponsorProxyRepository(arguments_.env.DB);
   const grantTokenHash = await sha256Hex(request.context.grantToken);
@@ -486,7 +495,7 @@ export async function proxyPaymasterRequest(
     arguments_.remoteIp,
     dayStart
   );
-  const walletLifetimeBypassed = await repository.isWalletLifetimeBypassed({
+  const walletQuotaBypassed = await repository.isWalletQuotaBypassed({
     action: SPONSOR_TURNSTILE_ACTION,
     chainId: BASE_SEPOLIA_DEPLOYMENT.chainId,
     now,
@@ -500,9 +509,10 @@ export async function proxyPaymasterRequest(
     grantWalletKey,
     ipBucketKey,
     method: request.method,
+    monthStart,
     now,
     policyVersion: config.policyVersion,
-    walletLifetimeBypassed
+    walletQuotaBypassed
   });
 
   let providerResponse: unknown;
@@ -608,7 +618,15 @@ export function createD1SponsorProxyRepository(
           "'sponsor:global:day:' || (SELECT request_day_start " +
           "FROM sponsor_claims WHERE claim_id = ? AND status = 'requested') " +
           "AND count > 0"
-      ).bind(claimId)
+      ).bind(claimId),
+      database.prepare(
+        "UPDATE quota_counters SET count = count - 1, " +
+          "updated_at = unixepoch() WHERE counter_key = " +
+          "'sponsor:wallet:month:' || (SELECT request_month_start " +
+          "FROM sponsor_claims WHERE claim_id = ? AND status = 'requested') " +
+          "|| ':' || (SELECT reserved_wallet_key FROM sponsor_claims " +
+          "WHERE claim_id = ? AND status = 'requested') AND count > 0"
+      ).bind(claimId, claimId)
     ];
   }
 
@@ -627,6 +645,9 @@ export function createD1SponsorProxyRepository(
     async reserve(reservation) {
       const globalCounterKey =
         `sponsor:global:day:${String(reservation.dayStart)}`;
+      const walletCounterKey =
+        `sponsor:wallet:month:${String(reservation.monthStart)}:` +
+        reservation.grantWalletKey;
       let results: D1Result[];
       try {
         results = await database.batch([
@@ -654,25 +675,37 @@ export function createD1SponsorProxyRepository(
               "AND quota_counters.period_start = excluded.period_start"
           ).bind(globalCounterKey, reservation.dayStart, reservation.now),
           database.prepare(
+            "INSERT INTO quota_counters " +
+              "(counter_key, period_kind, period_start, count, updated_at) " +
+              "SELECT ?, 'month', ?, 1, ? WHERE ? = 0 " +
+              "ON CONFLICT(counter_key) DO UPDATE SET " +
+              "count = quota_counters.count + 1, " +
+              "updated_at = excluded.updated_at " +
+              "WHERE quota_counters.period_kind = 'month' " +
+              "AND quota_counters.period_start = excluded.period_start"
+          ).bind(
+            walletCounterKey,
+            reservation.monthStart,
+            reservation.now,
+            reservation.walletQuotaBypassed ? 1 : 0
+          ),
+          database.prepare(
             "UPDATE sponsor_claims SET status = 'requested', " +
               "reserved_wallet_key = CASE WHEN ? = 1 THEN NULL " +
               "ELSE grant_wallet_key END, wallet_lifetime_bypassed = ?, " +
               "request_ip_bucket_key = ?, " +
-              "request_day_start = ?, request_method = ?, " +
+              "request_day_start = ?, request_month_start = ?, " +
+              "request_method = ?, " +
               "request_fingerprint_hash = ?, requested_at = ? " +
               "WHERE claim_id = ? AND status = 'grant_issued' " +
               "AND grant_token_hash = ? AND grant_wallet_key = ? " +
-              "AND policy_version = ? AND grant_expires_at > ? " +
-              "AND (? = 1 OR NOT EXISTS (" +
-              "SELECT 1 FROM sponsor_claims AS used " +
-              "WHERE used.wallet_sponsor_key = sponsor_claims.grant_wallet_key " +
-              "AND used.chain_id = sponsor_claims.chain_id " +
-              "AND used.action = sponsor_claims.action))"
+              "AND policy_version = ? AND grant_expires_at > ?"
           ).bind(
-            reservation.walletLifetimeBypassed ? 1 : 0,
-            reservation.walletLifetimeBypassed ? 1 : 0,
+            reservation.walletQuotaBypassed ? 1 : 0,
+            reservation.walletQuotaBypassed ? 1 : 0,
             reservation.ipBucketKey,
             reservation.dayStart,
+            reservation.monthStart,
             reservation.method,
             reservation.fingerprintHash,
             reservation.now,
@@ -680,8 +713,7 @@ export function createD1SponsorProxyRepository(
             reservation.grantTokenHash,
             reservation.grantWalletKey,
             reservation.policyVersion,
-            reservation.now,
-            reservation.walletLifetimeBypassed ? 1 : 0
+            reservation.now
           ),
           database.prepare(
             "INSERT INTO sponsor_reservation_assertions (claim_id, valid) " +
@@ -692,7 +724,11 @@ export function createD1SponsorProxyRepository(
               "WHERE bucket_key = ? AND window_start = ?), 0) = 1 " +
               "AND COALESCE((SELECT count <= 10 FROM quota_counters " +
               "WHERE counter_key = ? AND period_kind = 'day' " +
-              "AND period_start = ?), 0) = 1 THEN 1 ELSE 0 END)"
+              "AND period_start = ?), 0) = 1 " +
+              "AND (? = 1 OR COALESCE((SELECT count <= 3 " +
+              "FROM quota_counters WHERE counter_key = ? " +
+              "AND period_kind = 'month' AND period_start = ?), 0) = 1) " +
+              "THEN 1 ELSE 0 END)"
           ).bind(
             reservation.claimId,
             reservation.claimId,
@@ -700,7 +736,10 @@ export function createD1SponsorProxyRepository(
             reservation.ipBucketKey,
             reservation.dayStart,
             globalCounterKey,
-            reservation.dayStart
+            reservation.dayStart,
+            reservation.walletQuotaBypassed ? 1 : 0,
+            walletCounterKey,
+            reservation.monthStart
           ),
           database.prepare(
             "DELETE FROM sponsor_reservation_assertions WHERE claim_id = ?"
@@ -716,7 +755,7 @@ export function createD1SponsorProxyRepository(
         }
         throw error;
       }
-      if (results[2]?.meta.changes !== 1) reservationRejected();
+      if (results[3]?.meta.changes !== 1) reservationRejected();
     },
     async completeStub(completion) {
       const results = await database.batch([
@@ -725,7 +764,8 @@ export function createD1SponsorProxyRepository(
           "UPDATE sponsor_claims SET status = 'grant_issued', " +
             "reserved_wallet_key = NULL, stub_fingerprint_hash = ?, " +
             "stub_response_json = ?, request_ip_bucket_key = NULL, " +
-            "request_day_start = NULL, request_method = NULL, " +
+            "request_day_start = NULL, request_month_start = NULL, " +
+            "request_method = NULL, " +
             "request_fingerprint_hash = NULL, requested_at = NULL " +
             "WHERE claim_id = ? AND status = 'requested'"
         ).bind(
@@ -734,14 +774,13 @@ export function createD1SponsorProxyRepository(
           completion.claimId
         )
       ]);
-      const result = results[2];
+      const result = results[3];
       if (result.meta.changes !== 1) throw new Error("Sponsor stub state conflict.");
     },
     async completeSponsored(completion) {
       const result = await database.prepare(
         "UPDATE sponsor_claims SET status = 'sponsored', " +
-          "wallet_sponsor_key = CASE WHEN wallet_lifetime_bypassed = 1 " +
-          "THEN NULL ELSE grant_wallet_key END, reserved_wallet_key = NULL, " +
+          "wallet_sponsor_key = NULL, reserved_wallet_key = NULL, " +
           "provider_reference_hash = ?, provider_response_json = ?, " +
           "request_fingerprint_hash = ?, sponsored_at = ?, terminal_at = ? " +
           "WHERE claim_id = ? AND status = 'requested'"
@@ -765,7 +804,8 @@ export function createD1SponsorProxyRepository(
         database.prepare(
           "UPDATE sponsor_claims SET status = 'grant_issued', " +
             "reserved_wallet_key = NULL, request_ip_bucket_key = NULL, " +
-            "request_day_start = NULL, request_method = NULL, " +
+            "request_day_start = NULL, request_month_start = NULL, " +
+            "request_method = NULL, " +
             "request_fingerprint_hash = NULL, requested_at = NULL, " +
             "wallet_lifetime_bypassed = 0 " +
             "WHERE claim_id = ? AND status = 'requested'"
@@ -782,7 +822,7 @@ export function createD1SponsorProxyRepository(
         ).bind(now, claimId)
       ]);
     },
-    async isWalletLifetimeBypassed(arguments_) {
+    async isWalletQuotaBypassed(arguments_) {
       const row = await database.prepare(
         "SELECT 1 AS allowed FROM sponsor_wallet_allowlist " +
           "WHERE wallet_address = ? AND chain_id = ? AND action = ? " +

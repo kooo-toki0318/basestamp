@@ -38,6 +38,7 @@ basestamp_mvp_codex_brief_v*.md
 docs/HANDOFF.md
 docs/sponsorship.md
 docs/turnstile.md
+docs/validation-log.md
 
 # Foundry build and deployment artifacts
 /cache/

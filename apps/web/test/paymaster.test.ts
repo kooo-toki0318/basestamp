@@ -16,7 +16,8 @@ import { sha256Hex } from "../worker/crypto";
 import {
   proxyPaymasterRequest,
   type SponsorClaim,
-  type SponsorProxyRepository
+  type SponsorProxyRepository,
+  utcMonthStart
 } from "../worker/paymaster";
 import { createWalletSponsorKey } from "../worker/sponsor";
 import type { Bindings } from "../worker/types";
@@ -33,7 +34,7 @@ const env = {
   IP_BUCKET_HMAC_SECRET: "p".repeat(32),
   SPONSOR_ENABLED: "true",
   SPONSOR_ID_HMAC_SECRET: SPONSOR_SECRET,
-  SPONSOR_POLICY_VERSION: "1",
+  SPONSOR_POLICY_VERSION: "2",
   TURNSTILE_ALLOWED_HOSTNAMES: "basestamp-web.ndun000.workers.dev",
   TURNSTILE_SECRET_KEY: "t".repeat(32)
 } as unknown as Bindings;
@@ -87,7 +88,7 @@ async function createClaim(overrides: Partial<SponsorClaim> = {}): Promise<Spons
     grantExpiresAt: NOW + 300,
     grantTokenHash: await sha256Hex(GRANT_TOKEN),
     grantWalletKey: await createWalletSponsorKey(SPONSOR_SECRET, 84532, SENDER),
-    policyVersion: 1,
+    policyVersion: 2,
     providerResponseJson: null,
     requestFingerprintHash: null,
     status: "grant_issued",
@@ -102,9 +103,11 @@ function createRepository(claim: SponsorClaim, allowlisted = false) {
   let current = claim;
   const repository: SponsorProxyRepository = {
     findClaim: () => Promise.resolve(current),
-    isWalletLifetimeBypassed: () => Promise.resolve(allowlisted),
+    isWalletQuotaBypassed: () => Promise.resolve(allowlisted),
     reserve(reservation) {
-      events.push(`reserve:${String(reservation.walletLifetimeBypassed)}`);
+      events.push(
+        `reserve:${String(reservation.walletQuotaBypassed)}:${String(reservation.monthStart)}`
+      );
       current = {
         ...current,
         requestFingerprintHash: reservation.fingerprintHash,
@@ -148,7 +151,14 @@ function createRepository(claim: SponsorClaim, allowlisted = false) {
 }
 
 describe("Paymaster proxy", () => {
-  it("consumes the wallet slot only after a valid final provider response", async () => {
+  it("calculates wallet quota months at the UTC month boundary", () => {
+    expect(utcMonthStart(Date.parse("2026-08-31T23:59:59Z") / 1_000))
+      .toBe(Date.parse("2026-08-01T00:00:00Z") / 1_000);
+    expect(utcMonthStart(Date.parse("2026-09-01T00:00:00Z") / 1_000))
+      .toBe(Date.parse("2026-09-01T00:00:00Z") / 1_000);
+  });
+
+  it("consumes the monthly wallet quota only after a valid final response", async () => {
     const memory = createRepository(await createClaim());
     let accountVerified = false;
     const response = await proxyPaymasterRequest({
@@ -176,7 +186,10 @@ describe("Paymaster proxy", () => {
 
     expect(response).toEqual({ id: 7, result: { paymasterAndData: "0x1234" } });
     expect(accountVerified).toBe(true);
-    expect(memory.events).toEqual(["reserve:false", "sponsored"]);
+    expect(memory.events).toEqual([
+      `reserve:false:${String(utcMonthStart(NOW))}`,
+      "sponsored"
+    ]);
   });
 
   it("returns a cached final response without reaching the account RPC or provider again", async () => {
@@ -227,7 +240,10 @@ describe("Paymaster proxy", () => {
       repository: memory.repository,
       request: createRequest()
     })).rejects.toMatchObject({ code: "sponsor_provider_unavailable", status: 503 });
-    expect(memory.events).toEqual(["reserve:false", "released"]);
+    expect(memory.events).toEqual([
+      `reserve:false:${String(utcMonthStart(NOW))}`,
+      "released"
+    ]);
   });
 
   it("makes an explicit provider denial terminal without consuming quota", async () => {
@@ -245,7 +261,10 @@ describe("Paymaster proxy", () => {
       repository: memory.repository,
       request: createRequest()
     })).rejects.toMatchObject({ code: "sponsor_provider_rejected", status: 403 });
-    expect(memory.events).toEqual(["reserve:false", "denied"]);
+    expect(memory.events).toEqual([
+      `reserve:false:${String(utcMonthStart(NOW))}`,
+      "denied"
+    ]);
   });
 
   it("rejects a bad grant before account verification or provider forwarding", async () => {
@@ -270,7 +289,7 @@ describe("Paymaster proxy", () => {
     expect(memory.events).toEqual([]);
   });
 
-  it("caches a non-final stub response without consuming the lifetime slot", async () => {
+  it("caches a non-final stub response without consuming the monthly slot", async () => {
     const memory = createRepository(await createClaim());
     let providerCalls = 0;
     const request = createRequest("pm_getPaymasterStubData");
@@ -293,10 +312,13 @@ describe("Paymaster proxy", () => {
     await call();
     await call();
     expect(providerCalls).toBe(1);
-    expect(memory.events).toEqual(["reserve:false", "stub"]);
+    expect(memory.events).toEqual([
+      `reserve:false:${String(utcMonthStart(NOW))}`,
+      "stub"
+    ]);
   });
 
-  it("marks a D1-allowlisted Sepolia wallet as lifetime-bypassed", async () => {
+  it("marks a D1-allowlisted Sepolia wallet as monthly-quota-bypassed", async () => {
     const memory = createRepository(await createClaim(), true);
     await proxyPaymasterRequest({
       accountVerifier: () => Promise.resolve(),
@@ -311,6 +333,9 @@ describe("Paymaster proxy", () => {
       repository: memory.repository,
       request: createRequest()
     });
-    expect(memory.events).toEqual(["reserve:true", "sponsored"]);
+    expect(memory.events).toEqual([
+      `reserve:true:${String(utcMonthStart(NOW))}`,
+      "sponsored"
+    ]);
   });
 });
