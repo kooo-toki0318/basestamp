@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { isHex, type Address, type Hex } from "viem";
+import { isHex, numberToHex, type Address, type Hex } from "viem";
 import type { Connector } from "wagmi";
 import {
   useConnect,
@@ -56,6 +56,30 @@ type BaseSignInProvider = {
   }): Promise<unknown>;
 };
 
+type ChainProvider = {
+  request(arguments_:
+    | {
+        method: "eth_chainId";
+      }
+    | {
+        method: "wallet_switchEthereumChain";
+        params: [{ chainId: Hex }];
+      }): Promise<unknown>;
+};
+
+async function readConnectorChainId(connector: Connector): Promise<number> {
+  const provider = (await connector.getProvider()) as
+    | ChainProvider
+    | null
+    | undefined;
+  if (provider == null) throw new Error("Wallet provider is unavailable.");
+  const chainId = await provider.request({ method: "eth_chainId" });
+  if (typeof chainId !== "string" || !/^0x[0-9a-f]+$/iu.test(chainId)) {
+    throw new Error("Wallet returned an invalid chain ID.");
+  }
+  return Number(BigInt(chainId));
+}
+
 type AuthTone = "neutral" | "pending" | "success" | "error";
 
 type AuthFeedback = {
@@ -106,6 +130,7 @@ export function App() {
   const [selectedChainId, setSelectedChainId] =
     useState<SupportedChainId>(84532);
   const lastAutoSwitch = useRef<string | undefined>(undefined);
+  const adoptedWalletConnection = useRef<string | undefined>(undefined);
   const lastAutoAuthentication = useRef<string | undefined>(undefined);
   const selectedNetwork = getBaseNetwork(selectedChainId);
   const showAuthStatus = useCallback(
@@ -121,20 +146,35 @@ export function App() {
         throw new Error(t("auth.providerUnavailable"));
       }
       try {
-        const currentChainId = await connector.getChainId();
+        const currentChainId = await readConnectorChainId(connector);
         if (currentChainId === selectedChainId) return;
 
         showAuthStatus(
           t("auth.switching", { network: selectedNetwork.name }),
           "pending"
         );
-        const switchedChain = await switchChainAsync({
-          chainId: selectedChainId,
-          connector
-        });
-        const confirmedChainId = await connector.getChainId();
+        let switchedChainId: number;
+        if (connector.id === "baseAccount") {
+          const provider = (await connector.getProvider()) as
+            | ChainProvider
+            | null
+            | undefined;
+          if (provider == null) {
+            throw new Error(t("auth.providerUnavailable"));
+          }
+          await provider.request({
+            method: "wallet_switchEthereumChain",
+            params: [{ chainId: numberToHex(selectedChainId) }]
+          });
+          switchedChainId = await readConnectorChainId(connector);
+        } else {
+          switchedChainId = (
+            await switchChainAsync({ chainId: selectedChainId, connector })
+          ).id;
+        }
+        const confirmedChainId = await readConnectorChainId(connector);
         if (
-          switchedChain.id !== selectedChainId ||
+          switchedChainId !== selectedChainId ||
           confirmedChainId !== selectedChainId
         ) {
           throw new Error(
@@ -193,10 +233,27 @@ export function App() {
   }, [t]);
 
   useEffect(() => {
+    if (address === undefined || activeConnector === undefined) {
+      adoptedWalletConnection.current = undefined;
+      return;
+    }
+    if (walletChainId === undefined) return;
+
+    const connectionKey = `${activeConnector.uid}:${address}`;
+    if (adoptedWalletConnection.current !== connectionKey) {
+      adoptedWalletConnection.current = connectionKey;
+      if (isSupportedChainId(walletChainId)) {
+        lastAutoSwitch.current = undefined;
+        if (walletChainId !== selectedChainId) {
+          queueMicrotask(() => {
+            setSelectedChainId(walletChainId);
+          });
+          return;
+        }
+      }
+    }
+
     if (
-      address === undefined ||
-      activeConnector === undefined ||
-      walletChainId === undefined ||
       walletChainId === selectedChainId
     ) {
       lastAutoSwitch.current = undefined;
@@ -300,7 +357,7 @@ export function App() {
           });
           account = readConnectedAddress(response) ?? address;
           signedMessage = readBaseSiweResponse(response)?.signedMessage;
-          connectedChainId = await connector.getChainId();
+          connectedChainId = await readConnectorChainId(connector);
         } else {
           const connection = await connectAsync({
             connector,
@@ -318,7 +375,8 @@ export function App() {
         }
       } else if (reuseConnection) {
         account = address;
-        connectedChainId = walletChainId ?? (await connector.getChainId());
+        connectedChainId =
+          walletChainId ?? (await readConnectorChainId(connector));
       } else {
         const connection = await connectAsync({
           connector,

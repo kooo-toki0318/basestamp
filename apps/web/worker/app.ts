@@ -275,7 +275,13 @@ async function defaultVerifySiweSignature(arguments_: VerifyArguments): Promise<
   return client.verifyMessage({
     address: arguments_.address,
     message: arguments_.message,
-    signature: arguments_.signature
+    signature: arguments_.signature,
+    ...(arguments_.chainId === base.id
+      ? {
+          erc6492VerifierAddress:
+            "0x7dd271fa79df3a5feb99f73bebfa4395b2e4f4be" as const
+        }
+      : {})
   });
 }
 
