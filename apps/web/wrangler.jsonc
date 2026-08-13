@@ -16,7 +16,7 @@
     "SIWE_ALLOWED_DOMAIN": "basestamp-web.ndun000.workers.dev",
     "SIWE_ALLOWED_ORIGIN": "https://basestamp-web.ndun000.workers.dev",
     "SIWE_CHAIN_IDS": "84532,8453",
-    "SECURITY_CONTACT_URL": "",
+    "SECURITY_CONTACT_URL": "https://github.com/kooo-toki0318/basestamp/security/advisories/new",
     "SPONSOR_POLICY_VERSION": "2",
     "SPONSOR_ALLOWED_ORIGINS": "https://keys.coinbase.com",
     "TURNSTILE_ALLOWED_HOSTNAMES": "basestamp-web.ndun000.workers.dev"

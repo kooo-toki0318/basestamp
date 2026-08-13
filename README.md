@@ -274,12 +274,12 @@ production value is `https://keys.coinbase.com`. This is a non-secret
 allowlist, not an authentication control: every request still requires a
 short-lived grant and passes the server-side call and quota policy.
 
-The `/security` page is public, but the private reporting action and
-`/.well-known/security.txt` fail closed until GitHub Private Vulnerability
-Reporting is actually enabled for the repository. Keep both
-`SECURITY_CONTACT_URL` and `VITE_SECURITY_CONTACT_URL` empty until then. After
-GitHub confirms the channel is enabled, set both to the exact reviewed advisory
-URL and redeploy; neither value is secret.
+The `/security` page and `/.well-known/security.txt` use the repository's
+enabled GitHub Private Vulnerability Reporting channel. Both
+`SECURITY_CONTACT_URL` and `VITE_SECURITY_CONTACT_URL` are pinned to the same
+reviewed advisory URL; neither value is secret. Keep the server and browser
+values aligned, and re-check that the GitHub channel remains enabled before a
+release.
 
 The current preview disclosures are available at [legal notice](https://basestamp-web.ndun000.workers.dev/about/legal),
 [privacy](https://basestamp-web.ndun000.workers.dev/privacy),
