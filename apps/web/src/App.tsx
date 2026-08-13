@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { isHex, numberToHex, type Address, type Hex } from "viem";
+import { isHex, numberToHex, stringToHex, type Address, type Hex } from "viem";
 import type { Connector } from "wagmi";
 import {
   useConnect,
@@ -38,7 +38,7 @@ import {
 type PersonalSignProvider = {
   request(arguments_: {
     method: "personal_sign";
-    params: [string, Address];
+    params: [Hex, Address];
   }): Promise<unknown>;
 };
 
@@ -384,7 +384,7 @@ export function App() {
         }
         const signature = await provider.request({
           method: "personal_sign",
-          params: [message, account]
+          params: [stringToHex(message), account]
         });
         if (typeof signature !== "string" || !isHex(signature)) {
           throw new Error(t("auth.invalidSignature"));
