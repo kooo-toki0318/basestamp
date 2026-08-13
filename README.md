@@ -87,7 +87,10 @@ Cloudflare/CDP resources are still created manually by the operator.
 
 ## Current release
 
-The current release targets **Base Sepolia**.
+The public recording flow still targets **Base Sepolia**. The canonical Base
+Mainnet Registry is deployed and source-verified, but the browser Mainnet write
+gate remains disabled until the chain-aware client path is completed and
+reviewed.
 
 Milestone **3b preparation** is underway. The remaining real-wallet sponsor
 proof from Milestone 3a stays as a parallel release gate; it does not block
@@ -148,9 +151,17 @@ The canonical deployment record is stored in
 
 ## Base Mainnet launch preparation
 
-No canonical Base Mainnet Registry has been deployed yet, and the application
-still rejects Mainnet writes. A guarded deployment ceremony is ready for the
-operator once all Mainnet launch gates are satisfied.
+The ownerless canonical Base Mainnet Registry is deployed and the application
+still rejects Mainnet writes while the chain-aware transaction, confirmation,
+package, explorer, and verification paths are completed.
+
+- **Contract:** [`0x6491b8FBB13f7ADa916dD81B0834B529285f4EdB`](https://basescan.org/address/0x6491b8FBB13f7ADa916dD81B0834B529285f4EdB#code)
+- **Deployment transaction:** [`0xa7078d…ae84`](https://basescan.org/tx/0xa7078def113cadf25d0930ff8889fbd2d96112a805281e9cf3be38f06744ae84)
+- **Deployment block:** `49918391`
+- **Source verification:** Basescan `Pass - Verified`
+
+The canonical deployment record is stored in
+[`contracts/deployments/8453.json`](contracts/deployments/8453.json).
 
 The ceremony:
 

@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "network": "base-mainnet",
+  "chainId": 8453,
+  "registryAddress": "0x6491b8FBB13f7ADa916dD81B0834B529285f4EdB",
+  "transactionHash": "0xa7078def113cadf25d0930ff8889fbd2d96112a805281e9cf3be38f06744ae84",
+  "blockNumber": 49918391,
+  "blockHash": "0xa75701814f9c5683134e2372a4766de8da6200992e34fd050eef42c4d69aa607",
+  "blockTimestamp": "2026-08-13T13:02:09Z",
+  "sourceVerification": {
+    "provider": "Basescan",
+    "status": "Pass - Verified",
+    "verifiedAt": "2026-08-13T13:04:34Z",
+    "url": "https://basescan.org/address/0x6491b8FBB13f7ADa916dD81B0834B529285f4EdB#code"
+  },
+  "compiler": {
+    "version": "0.8.36+commit.8a079791",
+    "evmVersion": "osaka",
+    "optimizerEnabled": true,
+    "optimizerRuns": 200
+  },
+  "bytecode": {
+    "deployedRuntimeHash": "0xac0aa71c5520feb44da6618632174ef644cbe4cb59d10ef612e165218bfa20ce",
+    "immutableNormalizedRuntimeHash": "0xab6d923e4d5e088f958cc47d06696abdd29f0772164f54e83578c5ac9909ec22"
+  }
+}
