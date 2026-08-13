@@ -278,7 +278,8 @@ export function CreatePage({
     builderAttribution !== undefined;
   const {
     data: walletCapabilities,
-    isError: walletCapabilitiesFailed
+    isError: walletCapabilitiesFailed,
+    isSuccess: walletCapabilitiesResolved
   } = useCapabilities({
     chainId: BASE_SEPOLIA_DEPLOYMENT.chainId,
     query: {
@@ -287,7 +288,7 @@ export function CreatePage({
   });
   const sponsorCapabilityState = getSponsorCapabilityState(
     sponsorshipConfigured,
-    walletCapabilities !== undefined,
+    walletCapabilitiesResolved,
     walletCapabilities?.paymasterService?.supported === true,
     walletCapabilitiesFailed
   );
