@@ -128,8 +128,6 @@ Not available yet:
 
 - Base Mainnet recording;
 - completed real-wallet sponsorship, replay, failure, and Builder attribution validation;
-- an active private vulnerability-reporting channel and machine-readable
-  security contact;
 - x402;
 - server-side file or verification-package storage;
 - a public Handoff Receipt timeline or searchable Receipt index;
