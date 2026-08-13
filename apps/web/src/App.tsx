@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { isHex, numberToHex, type Address, type Hex } from "viem";
+import { isHex, type Address, type Hex } from "viem";
 import type { Connector } from "wagmi";
 import {
   useConnect,
@@ -47,10 +47,10 @@ type BaseSignInProvider = {
     method: "wallet_connect";
     params: [
       {
+        version: "1";
         capabilities: {
           signInWithEthereum: ReturnType<typeof createBaseSiweCapability>;
         };
-        chainIds: Hex[];
       }
     ];
   }): Promise<unknown>;
@@ -97,6 +97,7 @@ export function App() {
     isPending: networkBusy
   } = useSwitchChain();
   const [session, setSession] = useState<Session>({ authenticated: false });
+  const [sessionLoaded, setSessionLoaded] = useState(false);
   const [authFeedback, setAuthFeedback] = useState<AuthFeedback>({
     message: "",
     tone: "neutral"
@@ -105,6 +106,7 @@ export function App() {
   const [selectedChainId, setSelectedChainId] =
     useState<SupportedChainId>(84532);
   const lastAutoSwitch = useRef<string | undefined>(undefined);
+  const lastAutoAuthentication = useRef<string | undefined>(undefined);
   const selectedNetwork = getBaseNetwork(selectedChainId);
   const showAuthStatus = useCallback(
     (message: string, tone: AuthTone = "neutral") => {
@@ -184,6 +186,9 @@ export function App() {
       .then(setSession)
       .catch(() => {
         setSession({ authenticated: false });
+      })
+      .finally(() => {
+        setSessionLoaded(true);
       });
   }, [t]);
 
@@ -225,7 +230,7 @@ export function App() {
     }
   }
 
-  async function requestAuthNonce(): Promise<NonceResponse> {
+  const requestAuthNonce = useCallback(async (): Promise<NonceResponse> => {
     showAuthStatus(t("auth.requestNonce"), "pending");
     return fetch("/api/auth/nonce", {
       method: "POST",
@@ -233,11 +238,11 @@ export function App() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ chainId: selectedChainId })
     }).then((response) => parseJsonResponse<NonceResponse>(response, t));
-  }
+  }, [selectedChainId, showAuthStatus, t]);
 
-  async function verifySignedSiwe(
+  const verifySignedSiwe = useCallback(async (
     signedMessage: SignedSiweMessage
-  ): Promise<void> {
+  ): Promise<void> => {
     showAuthStatus(t("auth.verifying"), "pending");
     const authenticated = await fetch("/api/auth/verify", {
       method: "POST",
@@ -247,9 +252,9 @@ export function App() {
     }).then((response) => parseJsonResponse<Session>(response, t));
     setSession(authenticated);
     showAuthStatus(t("auth.signedIn"), "success");
-  }
+  }, [showAuthStatus, t]);
 
-  async function signIn(requestedConnector: Connector): Promise<void> {
+  const signIn = useCallback(async (requestedConnector: Connector): Promise<void> => {
     const connector = connectors.find(
       (candidate) => candidate.uid === requestedConnector.uid
     );
@@ -288,19 +293,14 @@ export function App() {
             method: "wallet_connect",
             params: [
               {
-                capabilities: { signInWithEthereum },
-                chainIds: [
-                  numberToHex(selectedChainId),
-                  ...BASE_NETWORKS.filter(
-                    (network) => network.chainId !== selectedChainId
-                  ).map((network) => numberToHex(network.chainId))
-                ]
+                version: "1",
+                capabilities: { signInWithEthereum }
               }
             ]
           });
           account = readConnectedAddress(response) ?? address;
           signedMessage = readBaseSiweResponse(response)?.signedMessage;
-          connectedChainId = walletChainId ?? (await connector.getChainId());
+          connectedChainId = await connector.getChainId();
         } else {
           const connection = await connectAsync({
             connector,
@@ -374,7 +374,20 @@ export function App() {
     } finally {
       setAuthBusy(false);
     }
-  }
+  }, [
+    activeConnector,
+    address,
+    connectAsync,
+    connectors,
+    ensureSelectedNetwork,
+    requestAuthNonce,
+    selectedChainId,
+    selectedNetwork.name,
+    showAuthStatus,
+    t,
+    verifySignedSiwe,
+    walletChainId
+  ]);
 
   async function disconnectWallet(): Promise<void> {
     setAuthBusy(true);
@@ -402,6 +415,42 @@ export function App() {
       setAuthBusy(false);
     }
   }
+
+  useEffect(() => {
+    if (
+      !sessionLoaded ||
+      authBusy ||
+      networkBusy ||
+      address === undefined ||
+      activeConnector?.id !== "baseAccount" ||
+      walletChainId !== selectedChainId
+    ) {
+      return;
+    }
+    const alreadyAuthenticated =
+      session.authenticated &&
+      session.walletAddress.toLowerCase() === address.toLowerCase() &&
+      session.chainId === selectedChainId;
+    if (alreadyAuthenticated) {
+      lastAutoAuthentication.current = undefined;
+      return;
+    }
+
+    const attemptKey = `${address}:${String(selectedChainId)}`;
+    if (lastAutoAuthentication.current === attemptKey) return;
+    lastAutoAuthentication.current = attemptKey;
+    void signIn(activeConnector);
+  }, [
+    activeConnector,
+    address,
+    authBusy,
+    networkBusy,
+    selectedChainId,
+    session,
+    sessionLoaded,
+    signIn,
+    walletChainId
+  ]);
 
   async function copyAddress(): Promise<void> {
     if (address === undefined) return;
