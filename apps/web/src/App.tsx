@@ -42,20 +42,6 @@ type PersonalSignProvider = {
   }): Promise<unknown>;
 };
 
-type BaseSignInProvider = {
-  request(arguments_: {
-    method: "wallet_connect";
-    params: [
-      {
-        version: "1";
-        capabilities: {
-          signInWithEthereum: ReturnType<typeof createBaseSiweCapability>;
-        };
-      }
-    ];
-  }): Promise<unknown>;
-};
-
 type ChainProvider = {
   request(arguments_:
     | {
@@ -339,24 +325,7 @@ export function App() {
         nonce = await requestAuthNonce();
         const signInWithEthereum = createBaseSiweCapability(nonce);
         if (reuseConnection) {
-          const provider = (await connector.getProvider()) as
-            | BaseSignInProvider
-            | null
-            | undefined;
-          if (provider == null) {
-            throw new Error(t("auth.providerUnavailable"));
-          }
-          const response = await provider.request({
-            method: "wallet_connect",
-            params: [
-              {
-                version: "1",
-                capabilities: { signInWithEthereum }
-              }
-            ]
-          });
-          account = readConnectedAddress(response) ?? address;
-          signedMessage = readBaseSiweResponse(response)?.signedMessage;
+          account = address;
           connectedChainId = await readConnectorChainId(connector);
         } else {
           const connection = await connectAsync({
