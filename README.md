@@ -176,6 +176,16 @@ set +a
 pnpm contracts:deploy:mainnet
 ```
 
+For the Foundry 1.7.1 browser signer, open the exact bridge origin
+`http://127.0.0.1:9545`; `http://localhost:9545` fails the bridge's CORS
+allowlist. Switch the wallet to the target chain before connecting. If the
+browser connection times out after a successful simulation, do not delete the
+dry-run evidence. Inspect that the chain-specific directory contains only the
+regular `dry-run/run-latest.json` and timestamped dry-run JSON, then explicitly
+set `BASESTAMP_RESUME_DRY_RUN=true` and rerun the ceremony. The script still
+rebuilds, re-simulates, rechecks chain and artifacts, and refuses any broadcast
+record or unexpected entry.
+
 Do not enable `VITE_MAINNET_WRITES_ENABLED` after the command alone. First review the
 deployment transaction, confirm source verification and runtime bytecode, and
 commit `contracts/deployments/8453.json` as the canonical record.

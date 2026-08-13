@@ -6,6 +6,7 @@ readonly expected_confirmation="DEPLOY BASESTAMP REGISTRY TO BASE MAINNET 8453"
 readonly deployer_account="basestamp-mainnet-deployer"
 readonly signer_mode="${BASESTAMP_SIGNER_MODE:-browser}"
 readonly browser_port="${BASESTAMP_BROWSER_PORT:-9545}"
+readonly resume_dry_run="${BASESTAMP_RESUME_DRY_RUN:-false}"
 readonly script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 readonly contracts_dir="$(cd -- "$script_dir/.." && pwd)"
 readonly repository_root="$(cd -- "$contracts_dir/.." && pwd)"
@@ -86,7 +87,19 @@ assert_current_mainnet_simulation_only() (
     fi
 )
 
-assert_no_prior_mainnet_deployment
+case "$resume_dry_run" in
+    false)
+        assert_no_prior_mainnet_deployment
+        ;;
+    true)
+        assert_current_mainnet_simulation_only
+        echo "Resuming after a verified dry-run-only browser connection failure."
+        ;;
+    *)
+        echo "Refusing deployment: BASESTAMP_RESUME_DRY_RUN must be true or false." >&2
+        exit 1
+        ;;
+esac
 
 raw_key_variables=(
     PRIVATE_KEY
@@ -191,6 +204,12 @@ if [[ "$actual_chain_id" != "$expected_chain_id" ]]; then
     exit 1
 fi
 assert_current_mainnet_simulation_only
+
+if [[ "$signer_mode" == "browser" ]]; then
+    echo "Browser signer: open http://127.0.0.1:$browser_port (not localhost)."
+    echo "Foundry 1.7.1 allows the exact 127.0.0.1 origin; localhost fails CORS."
+    echo "Switch the wallet to Base Mainnet (chain ID 8453) before connecting."
+fi
 
 (
     cd -- "$contracts_dir"

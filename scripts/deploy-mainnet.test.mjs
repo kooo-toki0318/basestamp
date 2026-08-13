@@ -197,6 +197,44 @@ test("rejects an empty prior Foundry chain directory", async (t) => {
   assert.deepEqual(await readCommands(fixture), []);
 });
 
+interactiveTest(
+  "explicitly resumes after a verified dry-run-only browser timeout",
+  async (t) => {
+    const fixture = await createFixture();
+    t.after(() => fixture.cleanup());
+    const dryRunDirectory = path.join(
+      fixture.contractsDir,
+      "broadcast/DeployBaseStampRegistry.s.sol/8453/dry-run",
+    );
+    await mkdir(dryRunDirectory, { recursive: true });
+    await writeFile(
+      path.join(dryRunDirectory, "run-1700000000000.json"),
+      "{}\n",
+    );
+    await writeFile(path.join(dryRunDirectory, "run-latest.json"), "{}\n");
+
+    const result = runInteractive(fixture, expectedConfirmation, {
+      BASESTAMP_RESUME_DRY_RUN: "true",
+    });
+
+    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    assert.match(
+      result.stdout,
+      /Resuming after a verified dry-run-only browser connection failure/,
+    );
+    assert.match(
+      result.stdout,
+      /open http:\/\/127\.0\.0\.1:9545 \(not localhost\)/,
+    );
+    const forgeCommands = (await readCommands(fixture)).filter(
+      ([command]) => command === "forge",
+    );
+    assert.equal(forgeCommands.length, 2);
+    assert.equal(forgeCommands[0].includes("--broadcast"), false);
+    assert.equal(forgeCommands[1].includes("--broadcast"), true);
+  },
+);
+
 test("rejects raw private-key variables before tool execution", async (t) => {
   const fixture = await createFixture();
   t.after(() => fixture.cleanup());
