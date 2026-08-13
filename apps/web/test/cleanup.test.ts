@@ -1,7 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   readCleanupHealth,
-  runCoreCleanup
+  runCoreCleanup,
+  runCoreCleanupSafely
 } from "../worker/cleanup";
 
 type CapturedStatement = {
@@ -49,6 +50,10 @@ function createHealthDatabase(updatedAt: number | undefined): D1Database {
 }
 
 describe("Core D1 cleanup", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("runs all retention operations in one atomic D1 batch with fixed cutoffs", async () => {
     const now = 1_800_000_000;
     const fixture = createCleanupDatabase();
@@ -103,5 +108,21 @@ describe("Core D1 cleanup", () => {
       1_800_000_000
     );
     expect(health.healthy).toBe(false);
+  });
+
+  it("contains scheduled failures and logs no exception details", async () => {
+    const errorLog = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    await expect(
+      runCoreCleanupSafely(
+        {} as D1Database,
+        () => Promise.reject(new Error("sensitive cleanup detail"))
+      )
+    ).resolves.toBeUndefined();
+    expect(errorLog).toHaveBeenCalledExactlyOnceWith(
+      JSON.stringify({ event: "cleanup_failed" })
+    );
+    expect(String(errorLog.mock.calls[0]?.[0])).not.toContain(
+      "sensitive cleanup detail"
+    );
   });
 });

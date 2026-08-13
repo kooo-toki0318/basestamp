@@ -45,6 +45,8 @@ import {
 } from "../lib/metadata";
 import {
   getBaseNetwork,
+  isMainnetWriteFlagEnabled,
+  isRegistryWriteAvailable,
   type SupportedChainId
 } from "../lib/networks";
 import { baseSepoliaPublicClient } from "../lib/onchain";
@@ -241,7 +243,11 @@ export function CreatePage({
   const { mutateAsync: sendTransactionAsync } = useSendTransaction();
   const { mutateAsync: sendCallsAsync } = useSendCalls();
   const selectedNetwork = getBaseNetwork(selectedChainId);
-  const registryAvailable = selectedChainId === 84532;
+  const registryAvailable = isRegistryWriteAvailable(
+    selectedChainId,
+    selectedNetwork.registryAvailable,
+    isMainnetWriteFlagEnabled(import.meta.env.VITE_MAINNET_WRITES_ENABLED)
+  );
   const turnstileSiteKey = readTurnstileSiteKey();
   const sponsorshipEnabled = readSponsorshipEnabled();
   const builderAttribution = readBuilderAttribution();

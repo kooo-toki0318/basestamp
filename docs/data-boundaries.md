@@ -30,6 +30,14 @@ allowed SIWE domain, origin, and Base chain; request headers do not choose them.
 The Worker reads the Registry independently, binds each handoff challenge to the
 authenticated wallet and Base Sepolia session, and never claims to have observed
 the browser-local file match.
+Persisted invocation logs are disabled. Application error paths emit only a
+fixed event name and, for HTTP errors, the method and bounded route class;
+scheduled-cleanup failures emit only a fixed event. BaseStamp does not put
+messages, stack traces, full paths, query strings, request bodies, IP addresses,
+wallet values, signatures, tokens, or provider URLs in custom logs. Automatic
+traces remain disabled because outbound provider URLs are confidential
+configuration. Cloudflare can still process platform and edge metadata under
+its service boundary independently of BaseStamp's custom log fields.
 
 ## Core D1
 

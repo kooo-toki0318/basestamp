@@ -17,6 +17,21 @@ export type SupportedChainId = (typeof BASE_NETWORKS)[number]["chainId"];
 
 export type BaseNetwork = (typeof BASE_NETWORKS)[number];
 
+export function isMainnetWriteFlagEnabled(
+  value: string | undefined
+): boolean {
+  return value === "true";
+}
+
+export function isRegistryWriteAvailable(
+  chainId: SupportedChainId,
+  deploymentAvailable: boolean,
+  mainnetWritesEnabled: boolean
+): boolean {
+  if (!deploymentAvailable) return false;
+  return chainId === 84532 || mainnetWritesEnabled;
+}
+
 export function isSupportedChainId(value: number): value is SupportedChainId {
   return BASE_NETWORKS.some((network) => network.chainId === value);
 }

@@ -33,6 +33,7 @@ Onchain state remains the canonical source for stamps.
 | Handoff challenge replay | CSPRNG nonce hash, ten-minute maximum lifetime, wallet/chain/stamp binding, and conditional one-time consumption |
 | Smart-account signature confusion | Block-pinned Viem verification for EOA and ERC-1271; ERC-6492 additionally requires the fixed Base Account factory, implementation, validator, predicted signer, and runtime code hashes |
 | Secret or personal-data leakage | No request-body logging, generic errors, no raw IP persistence |
+| Diagnostic telemetry leakage | Invocation logs and traces disabled; application error logs use fixed events and bounded route classes without request values; scheduled rejections are contained |
 | File upload or accidental exfiltration | No upload route; file bytes and salts are handled only in the browser |
 | Paymaster credential abuse | Worker-only CDP URL, short-lived wallet-bound grant, deep UserOperation decoding, and a second CDP contract/function policy |
 | Cross-origin Paymaster abuse | Exact Base Account popup-origin allowlist on the Paymaster route; POST and Content-Type only; no credentialed CORS |

@@ -11,7 +11,11 @@
     "strict": true,
     "skipLibCheck": true,
     "noEmit": true,
-    "types": ["@cloudflare/workers-types", "vitest"]
+    "types": [
+      "@cloudflare/workers-types",
+      "@cloudflare/vitest-pool-workers/types",
+      "vitest"
+    ]
   },
-  "include": ["worker", "test", "src/lib", "src/locale.ts", "src/auth-client.ts", "src/locale-negotiation.ts", "src/handoff-role.ts", "src/create-wallet-state.ts", "src/builder-attribution.ts", "src/sponsored-stamp.ts", "src/workers"]
+  "include": ["worker", "test", "test-d1", "src/lib", "src/locale.ts", "src/auth-client.ts", "src/locale-negotiation.ts", "src/handoff-role.ts", "src/create-wallet-state.ts", "src/builder-attribution.ts", "src/sponsored-stamp.ts", "src/public-pages.ts", "src/workers"]
 }

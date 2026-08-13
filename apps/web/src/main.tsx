@@ -7,6 +7,7 @@ import { captureHandoffFragment } from "./handoff-fragment";
 import { I18nProvider } from "./i18n";
 import "./styles.css";
 import "./improvements.css";
+import "./information.css";
 import { queryClient, wagmiConfig } from "./wagmi";
 
 captureHandoffFragment();

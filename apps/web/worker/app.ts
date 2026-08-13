@@ -53,6 +53,7 @@ import {
   type ProxyPaymasterResponse
 } from "./paymaster";
 import { readCleanupHealth } from "./cleanup";
+import { createSecurityTxt } from "./security-txt";
 
 const SESSION_COOKIE = "__Host-basestamp_session";
 const NONCE_TTL_SECONDS = 10 * 60;
@@ -365,6 +366,15 @@ function requireHandoffSignature(value: unknown): Hex {
   return value.toLowerCase() as Hex;
 }
 
+function diagnosticRoute(path: string): string {
+  if (path === "/api/sponsor") return "sponsor_proxy";
+  if (path.startsWith("/api/sponsor/")) return "sponsor_grant";
+  if (path.startsWith("/api/auth/")) return "authentication";
+  if (path.startsWith("/api/handoff/")) return "handoff";
+  if (path.startsWith("/api/health")) return "health";
+  return path.startsWith("/api/") ? "other_api" : "non_api";
+}
+
 export function createCoreApp(dependencies: Dependencies = {}) {
   const verifySiweSignature =
     dependencies.verifySiweSignature ?? defaultVerifySiweSignature;
@@ -419,8 +429,34 @@ export function createCoreApp(dependencies: Dependencies = {}) {
     context.header("Cache-Control", "no-store");
   });
 
+  app.get("/.well-known/security.txt", (context) => {
+    const document = createSecurityTxt(context.env.SECURITY_CONTACT_URL);
+    const available = document !== undefined;
+    return context.body(
+      document ?? "Security contact is not configured.\n",
+      available ? 200 : 503,
+      {
+        "Cache-Control": available
+          ? "public, max-age=3600, must-revalidate"
+          : "no-store",
+        "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
+        "Content-Type": "text/plain; charset=utf-8",
+        "Cross-Origin-Resource-Policy": "same-origin",
+        "Referrer-Policy": "no-referrer",
+        ...(available ? {} : { "Retry-After": "3600" }),
+        "Strict-Transport-Security": "max-age=15552000; includeSubDomains",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "DENY"
+      }
+    );
+  });
+
   app.get("/api/health", (context) =>
-    context.json({ ok: true, service: "basestamp-core", milestone: "2b" })
+    context.json({
+      ok: true,
+      service: "basestamp-core",
+      milestone: "3b-preparation"
+    })
   );
 
   app.get("/api/health/retention", async (context) => {
@@ -870,6 +906,11 @@ export function createCoreApp(dependencies: Dependencies = {}) {
         error.status
       );
     }
+    console.error(JSON.stringify({
+      event: "worker_unexpected_error",
+      method: context.req.method,
+      route: diagnosticRoute(context.req.path)
+    }));
     return context.json(
       { error: { code: "internal_error", message: "Request failed." } },
       500

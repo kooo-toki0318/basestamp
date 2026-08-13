@@ -34,10 +34,24 @@ const MAX_PROVIDER_RESPONSE_BYTES = 20_000;
 const BUILDER_CODE_PATTERN = /^[A-Za-z0-9_-]{1,64}$/u;
 const IP_ADDRESS_PATTERN = /^[0-9A-Fa-f:.]{2,64}$/u;
 const HEX_DATA_PATTERN = /^0x(?:[0-9a-fA-F]{2})+$/u;
+const BASE64_PATTERN =
+  /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u;
+const SPONSOR_ICON_DATA_PATTERN =
+  /^data:(image\/(?:gif|jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/iu;
+const MAX_PAYMASTER_AND_DATA_BYTES = 4_096;
+const MAX_SPONSOR_ICON_URI_BYTES = 12_288;
+const MAX_SPONSOR_NAME_CHARACTERS = 100;
+const ZERO_PAYMASTER_ADDRESS = "0x" + "0".repeat(40);
 
-type PaymasterResult = Record<string, unknown> & {
+type SponsorMetadata = {
+  icon?: string;
+  name: string;
+};
+
+type PaymasterResult = {
   paymasterAndData: Hex;
   isFinal?: boolean;
+  sponsor?: SponsorMetadata;
 };
 
 export type SponsorClaim = {
@@ -231,37 +245,122 @@ async function createIpBucketKey(
   );
 }
 
-function requireProviderResult(value: unknown): PaymasterResult {
+function isExpectedImageData(
+  mediaType: string,
+  data: Uint8Array
+): boolean {
+  if (mediaType === "image/png") {
+    return [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
+      .every((byte, index) => data[index] === byte);
+  }
+  if (mediaType === "image/webp") {
+    return (
+      data.length >= 12 &&
+      String.fromCharCode(...data.slice(0, 4)) === "RIFF" &&
+      String.fromCharCode(...data.slice(8, 12)) === "WEBP"
+    );
+  }
+  if (mediaType === "image/jpeg") {
+    return data[0] === 0xff && data[1] === 0xd8 && data[2] === 0xff;
+  }
+  return (
+    mediaType === "image/gif" &&
+    data.length >= 6 &&
+    ["GIF87a", "GIF89a"].includes(String.fromCharCode(...data.slice(0, 6)))
+  );
+}
+
+function requireSafeSponsorIcon(value: unknown): string | undefined {
+  if (
+    typeof value !== "string" ||
+    new TextEncoder().encode(value).byteLength > MAX_SPONSOR_ICON_URI_BYTES
+  ) {
+    return undefined;
+  }
+  const match = SPONSOR_ICON_DATA_PATTERN.exec(value);
+  if (match === null) return undefined;
+  const [, rawMediaType, payload] = match;
+  if (!BASE64_PATTERN.test(payload)) return undefined;
+  let binary: string;
+  try {
+    binary = globalThis.atob(payload);
+  } catch {
+    return undefined;
+  }
+  if (binary.length === 0) return undefined;
+  const data = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+  return isExpectedImageData(rawMediaType.toLowerCase(), data)
+    ? value
+    : undefined;
+}
+
+function isSafeSponsorName(value: string): boolean {
+  const characters = Array.from(value);
+  return (
+    value.trim() === value &&
+    characters.length >= 1 &&
+    characters.length <= MAX_SPONSOR_NAME_CHARACTERS &&
+    characters.every((character) => {
+      const codePoint = character.codePointAt(0) ?? 0;
+      return !(
+        codePoint <= 0x1f ||
+        (codePoint >= 0x7f && codePoint <= 0x9f) ||
+        (codePoint >= 0x202a && codePoint <= 0x202e) ||
+        (codePoint >= 0x2066 && codePoint <= 0x2069)
+      );
+    })
+  );
+}
+
+function requireSponsorMetadata(value: unknown): SponsorMetadata {
   if (
     !isRecord(value) ||
-    !hasOnlyKeys(value, ["paymasterAndData", "sponsor", "isFinal"]) ||
+    !hasOnlyKeys(value, ["name", "icon"]) ||
+    typeof value.name !== "string" ||
+    !isSafeSponsorName(value.name)
+  ) {
+    providerUnavailable();
+  }
+  const icon = requireSafeSponsorIcon(value.icon);
+  return icon === undefined ? { name: value.name } : { name: value.name, icon };
+}
+
+function requireProviderResult(
+  value: unknown,
+  method: ValidatedPaymasterRequest["method"]
+): PaymasterResult {
+  const allowedKeys =
+    method === "pm_getPaymasterStubData"
+      ? ["paymasterAndData", "sponsor", "isFinal"]
+      : ["paymasterAndData"];
+  if (
+    !isRecord(value) ||
+    !hasOnlyKeys(value, allowedKeys) ||
     typeof value.paymasterAndData !== "string" ||
     !HEX_DATA_PATTERN.test(value.paymasterAndData) ||
-    value.paymasterAndData.length > 8_194 ||
+    value.paymasterAndData.length < 42 ||
+    value.paymasterAndData.length > MAX_PAYMASTER_AND_DATA_BYTES * 2 + 2 ||
+    value.paymasterAndData.slice(0, 42).toLowerCase() ===
+      ZERO_PAYMASTER_ADDRESS ||
     (value.isFinal !== undefined && typeof value.isFinal !== "boolean")
   ) {
     providerUnavailable();
   }
-  if (value.sponsor !== undefined) {
-    if (
-      !isRecord(value.sponsor) ||
-      !hasOnlyKeys(value.sponsor, ["name", "icon"]) ||
-      typeof value.sponsor.name !== "string" ||
-      value.sponsor.name.length < 1 ||
-      value.sponsor.name.length > 100 ||
-      (value.sponsor.icon !== undefined &&
-        (typeof value.sponsor.icon !== "string" ||
-          value.sponsor.icon.length > 2_048))
-    ) {
-      providerUnavailable();
-    }
-  }
-  return value as PaymasterResult;
+  return {
+    paymasterAndData: value.paymasterAndData as Hex,
+    ...(value.isFinal === undefined ? {} : { isFinal: value.isFinal }),
+    ...(value.sponsor === undefined
+      ? {}
+      : { sponsor: requireSponsorMetadata(value.sponsor) })
+  };
 }
 
-function readStoredResult(value: string): PaymasterResult {
+function readStoredResult(
+  value: string,
+  method: ValidatedPaymasterRequest["method"]
+): PaymasterResult {
   try {
-    return requireProviderResult(JSON.parse(value) as unknown);
+    return requireProviderResult(JSON.parse(value) as unknown, method);
   } catch (error) {
     if (error instanceof ApiError) throw error;
     return providerUnavailable();
@@ -327,7 +426,7 @@ function parseProviderResponse(
   if (!hasOnlyKeys(response, ["jsonrpc", "id", "result"]) || !Object.hasOwn(response, "result")) {
     providerUnavailable();
   }
-  return requireProviderResult(response.result);
+  return requireProviderResult(response.result, request.method);
 }
 
 function rejectUnsupportedAccount(): never {
@@ -477,7 +576,10 @@ export async function proxyPaymasterRequest(
     claim.requestFingerprintHash === fingerprintHash &&
     claim.providerResponseJson !== null
   ) {
-    return { id: request.id, result: readStoredResult(claim.providerResponseJson) };
+    return {
+      id: request.id,
+      result: readStoredResult(claim.providerResponseJson, request.method)
+    };
   }
   if (
     request.method === "pm_getPaymasterStubData" &&
@@ -485,7 +587,10 @@ export async function proxyPaymasterRequest(
     claim.stubFingerprintHash === fingerprintHash &&
     claim.stubResponseJson !== null
   ) {
-    return { id: request.id, result: readStoredResult(claim.stubResponseJson) };
+    return {
+      id: request.id,
+      result: readStoredResult(claim.stubResponseJson, request.method)
+    };
   }
   if (claim.status !== "grant_issued") rejectSponsorship();
 

@@ -24,8 +24,10 @@ import { useI18n } from "./i18n-context";
 import { CreatePage } from "./pages/CreatePage";
 import { HandoffPage } from "./pages/HandoffPage";
 import { HomePage } from "./pages/HomePage";
+import { InformationPage } from "./pages/InformationPage";
 import { StampPage } from "./pages/StampPage";
 import { VerifyStartPage } from "./pages/VerifyStartPage";
+import { getPublicInformationPage } from "./public-pages";
 import {
   BASE_NETWORKS,
   getBaseNetwork,
@@ -428,6 +430,7 @@ export function App() {
   const stampId = currentStampId();
   const handoffStampId = currentHandoffStampId();
   const path = window.location.pathname;
+  const publicInformationPage = getPublicInformationPage(path);
 
   let page: React.ReactNode;
   if (path === "/" || path === "") {
@@ -458,6 +461,8 @@ export function App() {
     );
   } else if (path === "/verify" || path === "/verify/") {
     page = <VerifyStartPage />;
+  } else if (publicInformationPage !== undefined) {
+    page = <InformationPage page={publicInformationPage} />;
   } else if (handoffStampId !== undefined) {
     page = (
       <HandoffPage
@@ -703,8 +708,16 @@ export function App() {
       </div>
       <main>{page}</main>
       <footer className="shell footer">
-        <span>{t("footer.product")}</span>
-        <span>{t("footer.boundary")}</span>
+        <div className="footer-copy">
+          <span>{t("footer.product")}</span>
+          <span>{t("footer.boundary")}</span>
+        </div>
+        <nav className="footer-links" aria-label={t("footer.information")}>
+          <a href="/about/legal">{t("footer.legal")}</a>
+          <a href="/privacy">{t("footer.privacy")}</a>
+          <a href="/terms">{t("footer.terms")}</a>
+          <a href="/security">{t("footer.security")}</a>
+        </nav>
       </footer>
     </>
   );

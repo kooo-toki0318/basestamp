@@ -13,6 +13,7 @@
     "ci": "pnpm lint && pnpm typecheck && pnpm contracts:fmt:check && pnpm contracts:lint && pnpm test && pnpm contracts:artifact:check && pnpm d1:migrate:local && pnpm build",
     "contracts:artifact:check": "node scripts/check-registry-artifact.mjs",
     "contracts:build": "cd contracts && forge build",
+    "contracts:deploy:mainnet": "cd contracts && ./script/deploy-mainnet.sh",
     "contracts:fmt": "cd contracts && forge fmt",
     "contracts:fmt:check": "cd contracts && forge fmt --check",
     "contracts:lint": "cd contracts && forge lint --no-cache --out cache/lint-out --deny warnings",
@@ -22,7 +23,8 @@
     "env:init": "node scripts/init-local-env.mjs",
     "env:check": "node scripts/check-environment.mjs",
     "lint": "pnpm --filter @basestamp/web lint",
-    "test": "pnpm test:web && pnpm contracts:test",
+    "test": "pnpm test:web && pnpm contracts:test && pnpm test:deploy-mainnet",
+    "test:deploy-mainnet": "node --test scripts/deploy-mainnet.test.mjs",
     "test:web": "pnpm --filter @basestamp/web test",
     "typecheck": "pnpm --filter @basestamp/web typecheck",
     "wrangler": "wrangler"

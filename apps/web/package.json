@@ -11,7 +11,7 @@
     "d1:migrations:list:local": "wrangler d1 migrations list DB --local",
     "lint": "eslint .",
     "preview": "vite preview --host 0.0.0.0",
-    "test": "vitest run",
+    "test": "vitest run && vitest run --config vitest.d1.config.ts",
     "typecheck": "tsc -b"
   },
   "dependencies": {
@@ -27,6 +27,7 @@
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "1.50.0",
+    "@cloudflare/vitest-pool-workers": "0.19.1",
     "@cloudflare/workers-types": "5.20260801.1",
     "@eslint/js": "10.0.1",
     "@types/node": "26.1.2",

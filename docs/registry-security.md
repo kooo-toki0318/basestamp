@@ -58,14 +58,15 @@ are rejected and no Registry function can move a balance out.
 
 ## Release checklist
 
-Before any Base Sepolia deployment:
+Before any Registry deployment:
 
 1. Run `pnpm run ci` from the repository root.
 2. Review the compiled ABI and confirm there are no owner, admin, payable,
    withdrawal, token-transfer, or arbitrary-call entries.
-3. Confirm the RPC reports chain ID `84532`.
+3. Confirm the RPC reports the intended chain ID: `84532` for Base Sepolia or
+   `8453` for Base Mainnet.
 4. Confirm the selected signer address matches the intended deployment wallet.
-5. Fund only the deployment wallet with the minimum practical testnet ETH.
+5. Fund only the deployment wallet with the minimum practical ETH.
 6. Simulate the Foundry script before broadcasting.
 7. Broadcast and verify source with the pinned compiler, EVM target, optimizer,
    runs, and OpenZeppelin version.
@@ -73,5 +74,24 @@ Before any Base Sepolia deployment:
    verification URL in the public deployment manifest.
 9. Run direct, signed-relay, `getStamp`, and `exists` smoke checks against
    the deployed address before enabling it in browser configuration.
+
+### Additional Base Mainnet gate
+
+For chain `8453`, use `pnpm contracts:deploy:mainnet` and its interactive
+ceremony. It rejects raw private-key environment variables, an RPC on another
+chain, an unfunded or zero deployer, non-interactive confirmation, and any
+existing Mainnet deployment or broadcast record. It also rebuilds the artifact,
+compares the immutable-normalized runtime with the reviewed canonical Sepolia
+runtime, simulates before broadcasting, and requires source verification.
+
+After broadcast, review the transaction and explorer verification, compare the
+deployed runtime, create `contracts/deployments/8453.json`, and commit that
+manifest before configuring the application. Keep Mainnet writes and
+sponsorship disabled until the manifest, smoke checks, wallet-paid path,
+Builder attribution, external-provider policy, budgets, and kill switches have
+all passed their separate release gates.
+Before enabling the browser's Mainnet build flag, add chain-selected transaction,
+confirmation, package, explorer, and RPC paths and an integration test proving
+that the Mainnet submit path contains no Sepolia chain, Registry, or RPC value.
 
 A source-verified deployment is not an audit or security guarantee.

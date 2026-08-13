@@ -26,6 +26,11 @@ const NOW = 1_786_406_400;
 const BUILDER_CODE = "basestamp";
 const CLAIM_ID = "65e41858-cd5e-4c75-b9e4-9a772d748949";
 const GRANT_TOKEN = "g".repeat(43);
+const PAYMASTER_AND_DATA = `0x${"11".repeat(20)}`;
+const SAFE_PNG_ICON =
+  "data:image/png;base64," +
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk" +
+  "+A8AAQUBAScY42YAAAAASUVORK5CYII=";
 const SENDER = "0x1111111111111111111111111111111111111111" as Address;
 const SPONSOR_SECRET = "i".repeat(32);
 const env = {
@@ -176,7 +181,7 @@ describe("Paymaster proxy", () => {
         return Promise.resolve({
           jsonrpc: "2.0",
           id: 7,
-          result: { paymasterAndData: "0x1234" }
+          result: { paymasterAndData: PAYMASTER_AND_DATA }
         });
       },
       remoteIp: "203.0.113.10",
@@ -184,7 +189,10 @@ describe("Paymaster proxy", () => {
       request: createRequest()
     });
 
-    expect(response).toEqual({ id: 7, result: { paymasterAndData: "0x1234" } });
+    expect(response).toEqual({
+      id: 7,
+      result: { paymasterAndData: PAYMASTER_AND_DATA }
+    });
     expect(accountVerified).toBe(true);
     expect(memory.events).toEqual([
       `reserve:false:${String(utcMonthStart(NOW))}`,
@@ -198,7 +206,7 @@ describe("Paymaster proxy", () => {
     const provider = () => Promise.resolve({
       jsonrpc: "2.0",
       id: 7,
-      result: { paymasterAndData: "0x1234" }
+      result: { paymasterAndData: PAYMASTER_AND_DATA }
     });
     await proxyPaymasterRequest({
       accountVerifier: () => Promise.resolve(),
@@ -225,7 +233,7 @@ describe("Paymaster proxy", () => {
       repository: firstMemory.repository,
       request
     });
-    expect(retried.result).toEqual({ paymasterAndData: "0x1234" });
+    expect(retried.result).toEqual({ paymasterAndData: PAYMASTER_AND_DATA });
     expect(externalCalls).toBe(0);
   });
 
@@ -240,6 +248,145 @@ describe("Paymaster proxy", () => {
       repository: memory.repository,
       request: createRequest()
     })).rejects.toMatchObject({ code: "sponsor_provider_unavailable", status: 503 });
+    expect(memory.events).toEqual([
+      `reserve:false:${String(utcMonthStart(NOW))}`,
+      "released"
+    ]);
+  });
+
+  it("releases the reservation when paymasterAndData is shorter than an address", async () => {
+    const memory = createRepository(await createClaim());
+    await expect(proxyPaymasterRequest({
+      accountVerifier: () => Promise.resolve(),
+      env,
+      now: NOW,
+      provider: () => Promise.resolve({
+        jsonrpc: "2.0",
+        id: 7,
+        result: { paymasterAndData: "0x1234" }
+      }),
+      remoteIp: "203.0.113.10",
+      repository: memory.repository,
+      request: createRequest()
+    })).rejects.toMatchObject({
+      code: "sponsor_provider_unavailable",
+      status: 503
+    });
+    expect(memory.events).toEqual([
+      `reserve:false:${String(utcMonthStart(NOW))}`,
+      "released"
+    ]);
+  });
+
+  it("releases the reservation when paymasterAndData starts with the zero address", async () => {
+    const memory = createRepository(await createClaim());
+    await expect(proxyPaymasterRequest({
+      accountVerifier: () => Promise.resolve(),
+      env,
+      now: NOW,
+      provider: () => Promise.resolve({
+        jsonrpc: "2.0",
+        id: 7,
+        result: { paymasterAndData: `0x${"00".repeat(20)}11` }
+      }),
+      remoteIp: "203.0.113.10",
+      repository: memory.repository,
+      request: createRequest()
+    })).rejects.toMatchObject({
+      code: "sponsor_provider_unavailable",
+      status: 503
+    });
+    expect(memory.events).toEqual([
+      `reserve:false:${String(utcMonthStart(NOW))}`,
+      "released"
+    ]);
+  });
+
+  it("accepts safe RFC 2397 raster metadata on stub responses", async () => {
+    const memory = createRepository(await createClaim());
+    const response = await proxyPaymasterRequest({
+      accountVerifier: () => Promise.resolve(),
+      env,
+      now: NOW,
+      provider: () => Promise.resolve({
+        jsonrpc: "2.0",
+        id: 7,
+        result: {
+          paymasterAndData: PAYMASTER_AND_DATA,
+          sponsor: { name: "BaseStamp", icon: SAFE_PNG_ICON }
+        }
+      }),
+      remoteIp: "203.0.113.10",
+      repository: memory.repository,
+      request: createRequest("pm_getPaymasterStubData")
+    });
+    expect(response.result).toEqual({
+      paymasterAndData: PAYMASTER_AND_DATA,
+      sponsor: { name: "BaseStamp", icon: SAFE_PNG_ICON }
+    });
+    expect(memory.events).toEqual([
+      `reserve:false:${String(utcMonthStart(NOW))}`,
+      "stub"
+    ]);
+  });
+
+  it("drops remote, SVG, mislabeled, and oversized icons without breaking the stub", async () => {
+    const unsafeIcons = [
+      "https://example.com/sponsor.png",
+      "data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=",
+      "data:image/png;base64,PHN2Zz48L3N2Zz4=",
+      "data:image/png;base64," + "iVBORw0KGgo".padEnd(16_000, "A")
+    ];
+    for (const icon of unsafeIcons) {
+      const memory = createRepository(await createClaim());
+      const response = await proxyPaymasterRequest({
+        accountVerifier: () => Promise.resolve(),
+        env,
+        now: NOW,
+        provider: () => Promise.resolve({
+          jsonrpc: "2.0",
+          id: 7,
+          result: {
+            paymasterAndData: PAYMASTER_AND_DATA,
+            sponsor: { name: "BaseStamp", icon }
+          }
+        }),
+        remoteIp: "203.0.113.10",
+        repository: memory.repository,
+        request: createRequest("pm_getPaymasterStubData")
+      });
+      expect(response.result).toEqual({
+        paymasterAndData: PAYMASTER_AND_DATA,
+        sponsor: { name: "BaseStamp" }
+      });
+      expect(memory.events).toEqual([
+        `reserve:false:${String(utcMonthStart(NOW))}`,
+        "stub"
+      ]);
+    }
+  });
+
+  it("rejects stub-only metadata on final paymaster data responses", async () => {
+    const memory = createRepository(await createClaim());
+    await expect(proxyPaymasterRequest({
+      accountVerifier: () => Promise.resolve(),
+      env,
+      now: NOW,
+      provider: () => Promise.resolve({
+        jsonrpc: "2.0",
+        id: 7,
+        result: {
+          paymasterAndData: PAYMASTER_AND_DATA,
+          sponsor: { name: "BaseStamp" }
+        }
+      }),
+      remoteIp: "203.0.113.10",
+      repository: memory.repository,
+      request: createRequest()
+    })).rejects.toMatchObject({
+      code: "sponsor_provider_unavailable",
+      status: 503
+    });
     expect(memory.events).toEqual([
       `reserve:false:${String(utcMonthStart(NOW))}`,
       "released"
@@ -302,7 +449,7 @@ describe("Paymaster proxy", () => {
         return Promise.resolve({
           jsonrpc: "2.0",
           id: 7,
-          result: { paymasterAndData: "0x1234", isFinal: false }
+          result: { paymasterAndData: PAYMASTER_AND_DATA, isFinal: false }
         });
       },
       remoteIp: "203.0.113.10",
@@ -327,7 +474,7 @@ describe("Paymaster proxy", () => {
       provider: () => Promise.resolve({
         jsonrpc: "2.0",
         id: 7,
-        result: { paymasterAndData: "0x1234" }
+        result: { paymasterAndData: PAYMASTER_AND_DATA }
       }),
       remoteIp: "203.0.113.10",
       repository: memory.repository,

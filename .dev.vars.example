@@ -1,14 +1,14 @@
 # Copy to .dev.vars for local Worker development. The real file is gitignored.
 # Leave every capability disabled until its milestone release gate passes.
 APP_ENV=
-MAINNET_WRITES_ENABLED=false
 SPONSOR_ENABLED=false
 X402_TESTNET_ENABLED=false
 X402_MAINNET_ENABLED=false
 SIWE_ALLOWED_DOMAIN=
 SIWE_ALLOWED_ORIGIN=
 SIWE_CHAIN_IDS=
-SPONSOR_POLICY_VERSION=1
+SECURITY_CONTACT_URL=
+SPONSOR_POLICY_VERSION=2
 SPONSOR_ALLOWED_ORIGINS=
 TURNSTILE_ALLOWED_HOSTNAMES=
 

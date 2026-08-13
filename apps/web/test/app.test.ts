@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createCoreApp } from "../worker/app";
 import type { Bindings } from "../worker/types";
 
@@ -21,13 +21,17 @@ const sponsorEnv = {
 } as Bindings;
 
 describe("Core Worker surface", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("serves a no-store health response with security headers", async () => {
     const response = await app.request("/api/health", undefined, emptyEnv);
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
       ok: true,
       service: "basestamp-core",
-      milestone: "2b"
+      milestone: "3b-preparation"
     });
     expect(response.headers.get("cache-control")).toBe("no-store");
     expect(response.headers.get("x-content-type-options")).toBe("nosniff");
@@ -296,6 +300,7 @@ describe("Core Worker surface", () => {
   });
 
   it("returns Paymaster errors to the trusted popup through CORS", async () => {
+    const errorLog = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const response = await createCoreApp({
       proxyPaymaster: () =>
         Promise.reject(
@@ -320,6 +325,16 @@ describe("Core Worker surface", () => {
     await expect(response.json()).resolves.toMatchObject({
       error: { code: "internal_error" }
     });
+    expect(errorLog).toHaveBeenCalledOnce();
+    const logged = String(errorLog.mock.calls[0]?.[0]);
+    expect(logged).toBe(JSON.stringify({
+      event: "worker_unexpected_error",
+      method: "POST",
+      route: "sponsor_proxy"
+    }));
+    expect(logged).not.toContain(
+      "provider response intentionally failed"
+    );
   });
 
   it("rejects untrusted Paymaster origins and preflight headers", async () => {

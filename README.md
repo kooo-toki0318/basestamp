@@ -2,6 +2,8 @@
 
 Private file records and independent verification on Base.
 
+Live Base Sepolia preview: [basestamp-web.ndun000.workers.dev](https://basestamp-web.ndun000.workers.dev/)
+
 BaseStamp lets you record that a specific file existed without uploading the
 file itself. It creates a salted commitment locally in your browser, stores the
 minimum public record on Base, and gives you both a private handoff link and a
@@ -87,6 +89,11 @@ Cloudflare/CDP resources are still created manually by the operator.
 
 The current release targets **Base Sepolia**.
 
+Milestone **3b preparation** is underway. The remaining real-wallet sponsor
+proof from Milestone 3a stays as a parallel release gate; it does not block
+chain-independent Mainnet readiness work. Mainnet writes and Mainnet
+sponsorship remain disabled.
+
 Available:
 
 - browser wallet and Sign in with Base authentication;
@@ -102,6 +109,9 @@ Available:
 - salted SHA-256 commitments calculated in a browser worker;
 - wallet-confirmed Base Sepolia Registry transactions, including a live-validation Base Account sponsorship path with an explicit wallet-paid alternative;
 - Turnstile-gated, wallet-bound sponsorship grants and a Worker Paymaster proxy with strict UserOperation validation, D1 quotas, and retention cleanup;
+- real-D1 concurrency coverage proving that the monthly wallet quota admits at
+  most three simultaneous sponsorship reservations and rolls failed
+  reservations back atomically;
 - automatic verification-package download;
 - private fragment handoff URLs with explicit copy, Web Share, and local QR;
 - local recipient comparison with no file or salt upload;
@@ -110,12 +120,16 @@ Available:
   allowlisted Base Account ERC-6492 verification;
 - classic sender-to-recipient JSON handoff;
 - wallet-free recipient verification;
-- strict package parsing and pinned Registry/RPC verification.
+- strict package parsing and pinned Registry/RPC verification;
+- public Japanese and English legal, privacy, terms, and security-readiness
+  pages linked from every page footer.
 
 Not available yet:
 
 - Base Mainnet recording;
 - completed real-wallet sponsorship, replay, failure, and Builder attribution validation;
+- an active private vulnerability-reporting channel and machine-readable
+  security contact;
 - x402;
 - server-side file or verification-package storage;
 - a public Handoff Receipt timeline or searchable Receipt index;
@@ -133,6 +147,45 @@ withdrawal surface.
 
 The canonical deployment record is stored in
 [`contracts/deployments/84532.json`](contracts/deployments/84532.json).
+
+## Base Mainnet launch preparation
+
+No canonical Base Mainnet Registry has been deployed yet, and the application
+still rejects Mainnet writes. A guarded deployment ceremony is ready for the
+operator once all Mainnet launch gates are satisfied.
+
+The ceremony:
+
+- requires an RPC that reports Base Mainnet chain ID `8453`;
+- rejects raw private-key environment variables and supports a browser wallet,
+  Foundry keystore, Ledger, or Trezor;
+- verifies a funded, nonzero deployer address;
+- rebuilds the Registry and proves that its normalized runtime matches the
+  reviewed canonical Sepolia artifact;
+- simulates without broadcasting before an exact interactive confirmation;
+- refuses a second deployment if a Mainnet deployment or broadcast record
+  already exists;
+- requires source verification during broadcast.
+
+Configure only ignored local values in `contracts/.env`. The deployment script
+intentionally does not source that file, so explicitly export its values into
+the current interactive shell before the reviewed ceremony:
+
+```bash
+set -a
+source contracts/.env
+set +a
+pnpm contracts:deploy:mainnet
+```
+
+Do not enable `VITE_MAINNET_WRITES_ENABLED` after the command alone. First review the
+deployment transaction, confirm source verification and runtime bytecode, and
+commit `contracts/deployments/8453.json` as the canonical record.
+The current client transaction, confirmation, package, and sponsorship paths
+remain Sepolia-specific, and the Mainnet deployment-availability gate is also
+false. Both the chain-specific implementation and a test proving that a
+Mainnet submission never references Sepolia are required before changing
+either gate.
 
 ## Local development
 
@@ -167,9 +220,10 @@ existing files or printing the generated session secret.
 pnpm run ci
 ```
 
-This runs linting, TypeScript checks, Solidity formatting and linting, web and
-contract tests, Registry artifact validation, the local D1 migration, and
-production builds.
+This runs linting, TypeScript checks, Solidity formatting and linting, browser
+and Worker tests, a migrated local-D1 sponsorship concurrency test, contract
+tests, Registry artifact validation, the local D1 migration, and production
+builds.
 
 Individual commands are also available:
 
@@ -219,6 +273,27 @@ Account popup origins listed in `SPONSOR_ALLOWED_ORIGINS`; the current
 production value is `https://keys.coinbase.com`. This is a non-secret
 allowlist, not an authentication control: every request still requires a
 short-lived grant and passes the server-side call and quota policy.
+
+The `/security` page is public, but the private reporting action and
+`/.well-known/security.txt` fail closed until GitHub Private Vulnerability
+Reporting is actually enabled for the repository. Keep both
+`SECURITY_CONTACT_URL` and `VITE_SECURITY_CONTACT_URL` empty until then. After
+GitHub confirms the channel is enabled, set both to the exact reviewed advisory
+URL and redeploy; neither value is secret.
+
+The current preview disclosures are available at [legal notice](https://basestamp-web.ndun000.workers.dev/about/legal),
+[privacy](https://basestamp-web.ndun000.workers.dev/privacy),
+[terms](https://basestamp-web.ndun000.workers.dev/terms), and
+[security](https://basestamp-web.ndun000.workers.dev/security). They document
+the present Base Sepolia preview; they do not complete the operator, governing
+law, private contact, or specialist-review gates required for Mainnet.
+
+BaseStamp's custom Workers Logs contain only fixed application-error events and,
+for HTTP failures, the method and a bounded route class. Scheduled rejections
+are contained. Invocation logs and automatic traces are disabled; BaseStamp
+does not add request values, full paths, IPs, signatures, tokens, or confidential
+provider URLs to custom logs. Cloudflare can still process platform and edge
+metadata under its own service boundary.
 
 ### Production Worker authentication
 

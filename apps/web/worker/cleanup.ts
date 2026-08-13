@@ -128,3 +128,14 @@ export async function runCoreCleanup(
     ).bind(CLEANUP_STATUS_KEY, now, now)
   ]);
 }
+
+export async function runCoreCleanupSafely(
+  database: D1Database,
+  cleanup: (database: D1Database) => Promise<void> = runCoreCleanup
+): Promise<void> {
+  try {
+    await cleanup(database);
+  } catch {
+    console.error(JSON.stringify({ event: "cleanup_failed" }));
+  }
+}
