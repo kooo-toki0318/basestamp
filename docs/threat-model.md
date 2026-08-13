@@ -34,9 +34,15 @@ Onchain state remains the canonical source for stamps.
 | Smart-account signature confusion | Block-pinned Viem verification for EOA and ERC-1271; ERC-6492 additionally requires the fixed Base Account factory, implementation, validator, predicted signer, and runtime code hashes |
 | Secret or personal-data leakage | No request-body logging, generic errors, no raw IP persistence |
 | File upload or accidental exfiltration | No upload route; file bytes and salts are handled only in the browser |
+| Paymaster credential abuse | Worker-only CDP URL, short-lived wallet-bound grant, deep UserOperation decoding, and a second CDP contract/function policy |
+| Cross-origin Paymaster abuse | Exact Base Account popup-origin allowlist on the Paymaster route; POST and Content-Type only; no credentialed CORS |
+| Sponsor quota races | Atomic D1 reservation with wallet-month, HMAC IP-day, and service-day assertions before provider forwarding |
+| Wallet-selected fee-path confusion | Wallet capability detection, non-optional app Paymaster request, no automatic wallet-paid fallback, and live D1 confirmation required for release evidence |
 
 ## Out of scope
 
-Turnstile, rate limiting, cleanup scheduling and alerting, sponsor grants,
-x402, and Mainnet writes remain disabled. Placeholder tables and feature flags
-do not enable those capabilities.
+x402 and Mainnet writes remain disabled. Base Sepolia sponsorship is enabled
+only for release validation and includes Turnstile, sponsor grants, rate
+limits, hourly cleanup, and retention health. A successful wallet transaction
+alone does not prove that BaseStamp's Paymaster was used; release evidence must
+also show the matching D1 claim reached its sponsored state.

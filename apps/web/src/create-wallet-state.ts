@@ -7,6 +7,11 @@ export type CreateWalletState =
 export type CreateConfirmationState = "idle" | "confirming" | "retry";
 
 export type CreateFundingMode = "sponsored" | "wallet-paid";
+export type SponsorCapabilityState =
+  | "not-configured"
+  | "checking"
+  | "supported"
+  | "unsupported";
 
 export function getCreateWalletState(
   connected: boolean,
@@ -34,4 +39,15 @@ export function getCreateFundingMode(
   return sponsorshipAvailable && !walletFeeChosen
     ? "sponsored"
     : "wallet-paid";
+}
+
+export function getSponsorCapabilityState(
+  configured: boolean,
+  resolved: boolean,
+  supported: boolean,
+  failed: boolean
+): SponsorCapabilityState {
+  if (!configured) return "not-configured";
+  if (!resolved && !failed) return "checking";
+  return supported ? "supported" : "unsupported";
 }

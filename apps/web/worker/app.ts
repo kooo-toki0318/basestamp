@@ -58,6 +58,8 @@ const SESSION_COOKIE = "__Host-basestamp_session";
 const NONCE_TTL_SECONDS = 10 * 60;
 const SESSION_TTL_SECONDS = 24 * 60 * 60;
 const CLOCK_SKEW_MS = 5 * 60 * 1000;
+const PAYMASTER_CORS_MAX_AGE_SECONDS = 10 * 60;
+const PAYMASTER_CORS_REQUEST_HEADERS = new Set(["content-type"]);
 
 type VerifyArguments = {
   address: Hex;
@@ -181,6 +183,81 @@ function isAllowedChainId(
 
 function requireOrigin(request: Request, config: AuthConfig): void {
   if (request.headers.get("origin") !== config.origin) {
+    throw new ApiError(403, "origin_rejected", "Request origin is not allowed.");
+  }
+}
+
+function readPaymasterBrowserOrigins(env: Bindings): Set<string> {
+  const configured = env.SPONSOR_ALLOWED_ORIGINS?.trim() ?? "";
+  const values = configured
+    .split(",")
+    .map((value) => value.trim())
+    .filter((value) => value !== "");
+  const origins = new Set<string>();
+
+  if (values.length === 0 || values.length > 8) {
+    throw new ApiError(
+      503,
+      "sponsor_not_configured",
+      "Sponsorship is not configured."
+    );
+  }
+  for (const value of values) {
+    let parsed: URL;
+    try {
+      parsed = new URL(value);
+    } catch {
+      throw new ApiError(
+        503,
+        "sponsor_not_configured",
+        "Sponsorship is not configured."
+      );
+    }
+    if (
+      parsed.protocol !== "https:" ||
+      parsed.origin !== value ||
+      parsed.username !== "" ||
+      parsed.password !== "" ||
+      origins.has(value)
+    ) {
+      throw new ApiError(
+        503,
+        "sponsor_not_configured",
+        "Sponsorship is not configured."
+      );
+    }
+    origins.add(value);
+  }
+  return origins;
+}
+
+function requirePaymasterBrowserOrigin(
+  env: Bindings,
+  origin: string | undefined
+): string | undefined {
+  if (origin === undefined) return undefined;
+  if (!readPaymasterBrowserOrigins(env).has(origin)) {
+    throw new ApiError(403, "origin_rejected", "Request origin is not allowed.");
+  }
+  return origin;
+}
+
+function requirePaymasterPreflight(request: Request): void {
+  if (request.headers.get("Access-Control-Request-Method") !== "POST") {
+    throw new ApiError(403, "origin_rejected", "Request origin is not allowed.");
+  }
+  const requestedHeaders = (request.headers.get(
+    "Access-Control-Request-Headers"
+  ) ?? "")
+    .split(",")
+    .map((value) => value.trim().toLowerCase())
+    .filter((value) => value !== "");
+  if (
+    requestedHeaders.length === 0 ||
+    requestedHeaders.some(
+      (header) => !PAYMASTER_CORS_REQUEST_HEADERS.has(header)
+    )
+  ) {
     throw new ApiError(403, "origin_rejected", "Request origin is not allowed.");
   }
 }
@@ -311,7 +388,21 @@ export function createCoreApp(dependencies: Dependencies = {}) {
       proxyPaymasterRequest({ env, remoteIp, request }));
   const app = new Hono<{ Bindings: Bindings }>();
 
-
+  app.use("/api/sponsor", async (context, next) => {
+    const origin = requirePaymasterBrowserOrigin(
+      context.env,
+      context.req.header("Origin")
+    );
+    try {
+      await next();
+    } finally {
+      if (origin !== undefined) {
+        context.header("Access-Control-Allow-Origin", origin);
+        context.header("Vary", "Origin");
+        context.header("Cross-Origin-Resource-Policy", "cross-origin");
+      }
+    }
+  });
   app.use(
     "/api/*",
     secureHeaders({
@@ -563,6 +654,17 @@ export function createCoreApp(dependencies: Dependencies = {}) {
       walletAddress: getAddress(session.wallet_address)
     });
     return context.json(result);
+  });
+
+  app.options("/api/sponsor", (context) => {
+    requirePaymasterPreflight(context.req.raw);
+    context.header("Access-Control-Allow-Headers", "Content-Type");
+    context.header("Access-Control-Allow-Methods", "POST");
+    context.header(
+      "Access-Control-Max-Age",
+      String(PAYMASTER_CORS_MAX_AGE_SECONDS)
+    );
+    return context.body(null, 204);
   });
 
   app.post("/api/sponsor", async (context) => {

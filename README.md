@@ -214,6 +214,11 @@ variables and must never contain secret values.
 BaseStamp does not create Turnstile or CDP resources through their APIs.
 Base Sepolia sponsorship is enabled for live release validation only after its
 operator-run resource, secret, migration, and release gates have completed.
+The browser-facing Paymaster proxy accepts CORS only from the exact Base
+Account popup origins listed in `SPONSOR_ALLOWED_ORIGINS`; the current
+production value is `https://keys.coinbase.com`. This is a non-secret
+allowlist, not an authentication control: every request still requires a
+short-lived grant and passes the server-side call and quota policy.
 
 ### Production Worker authentication
 

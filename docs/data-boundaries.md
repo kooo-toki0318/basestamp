@@ -33,7 +33,7 @@ the browser-local file match.
 
 ## Core D1
 
-D1 is limited to these eight reviewed tables:
+D1 is limited to these nine reviewed tables:
 
 - `auth_nonces`
 - `sessions`
@@ -43,6 +43,7 @@ D1 is limited to these eight reviewed tables:
 - `quota_counters`
 - `rate_limit_buckets`
 - `sponsor_wallet_allowlist`
+- `sponsor_reservation_assertions`
 
 Authentication nonces and session tokens are stored only as cryptographic
 hashes. Handoff acknowledgement nonces are also stored only as hashes, together
@@ -53,13 +54,18 @@ except for the narrow operator test-wallet exception below.
 The deployed Registry is the canonical source for
 stamps; `stamp_refs` is only short-lived UI reference state.
 
-The eighth table is a reviewed exception to the original seven-table boundary:
+The eighth durable table is a reviewed exception to the original seven-table
+boundary:
 `sponsor_wallet_allowlist` contains only a lowercase Base Sepolia test-wallet
 address, fixed chain and action, and creation/expiry timestamps. It exists so a
 small number of operator-owned test wallets can bypass the monthly wallet
 quota without weakening Turnstile, call validation, or daily quotas. It cannot
 contain notes or user-supplied text, has no Mainnet chain option, and expired
 rows are removed by scheduled cleanup. Production users must never be added.
+The ninth table, `sponsor_reservation_assertions`, is a transaction-local D1
+guard used to force an atomic batch rollback when any quota assertion fails.
+Its rows contain only a claim ID and boolean validity marker and are deleted in
+the same successful batch; they are not retained application data.
 
 Core retention is enforced hourly:
 
@@ -87,5 +93,8 @@ The browser uses a fixed Base Sepolia RPC for signature verification, Registry
 reads and user-approved writes, and receipt, block, and event checks. Request and
 verification-package values cannot select a different RPC or Registry address.
 The CDP URL remains Worker-only, and the Worker removes its internal grant
-token before forwarding a validated request. Sponsorship, x402, and Mainnet
-write flags remain disabled until their release gates pass.
+token before forwarding a validated request. The browser-facing Paymaster
+route allows cross-origin requests only from exact configured Base Account
+popup origins and does not allow cookies. Base Sepolia sponsorship is enabled
+for release validation; x402 and Mainnet write flags remain disabled until
+their release gates pass.

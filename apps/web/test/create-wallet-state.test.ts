@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   getCreateConfirmationState,
   getCreateFundingMode,
+  getSponsorCapabilityState,
   getCreateWalletState
 } from "../src/create-wallet-state";
 
@@ -43,5 +44,23 @@ describe("Create transaction funding", () => {
   it("switches to wallet-paid only after an explicit choice", () => {
     expect(getCreateFundingMode(true, false)).toBe("sponsored");
     expect(getCreateFundingMode(true, true)).toBe("wallet-paid");
+  });
+
+  it("waits for an explicit Paymaster capability result", () => {
+    expect(getSponsorCapabilityState(false, false, false, false)).toBe(
+      "not-configured"
+    );
+    expect(getSponsorCapabilityState(true, false, false, false)).toBe(
+      "checking"
+    );
+    expect(getSponsorCapabilityState(true, true, true, false)).toBe(
+      "supported"
+    );
+    expect(getSponsorCapabilityState(true, true, false, false)).toBe(
+      "unsupported"
+    );
+    expect(getSponsorCapabilityState(true, false, false, true)).toBe(
+      "unsupported"
+    );
   });
 });

@@ -13,6 +13,7 @@ const configuredEnv = {
 const sponsorEnv = {
   ...configuredEnv,
   SPONSOR_ENABLED: "true",
+  SPONSOR_ALLOWED_ORIGINS: "https://keys.coinbase.com",
   SPONSOR_POLICY_VERSION: "1",
   SPONSOR_ID_HMAC_SECRET: "i".repeat(32),
   TURNSTILE_ALLOWED_HOSTNAMES: "basestamp-web.ndun000.workers.dev",
@@ -264,6 +265,100 @@ describe("Core Worker surface", () => {
       result: { paymasterAndData: "0x1234" }
     });
     expect(proxyCalled).toBe(true);
+  });
+
+  it("allows the Base Account popup to preflight the Paymaster proxy", async () => {
+    const response = await createCoreApp().request(
+      "/api/sponsor",
+      {
+        method: "OPTIONS",
+        headers: {
+          "Access-Control-Request-Headers": "content-type",
+          "Access-Control-Request-Method": "POST",
+          Origin: "https://keys.coinbase.com"
+        }
+      },
+      sponsorEnv
+    );
+    expect(response.status).toBe(204);
+    expect(response.headers.get("access-control-allow-origin")).toBe(
+      "https://keys.coinbase.com"
+    );
+    expect(response.headers.get("access-control-allow-methods")).toBe("POST");
+    expect(response.headers.get("access-control-allow-headers")).toBe(
+      "Content-Type"
+    );
+    expect(response.headers.get("access-control-allow-credentials")).toBeNull();
+    expect(response.headers.get("cross-origin-resource-policy")).toBe(
+      "cross-origin"
+    );
+    expect(response.headers.get("vary")).toBe("Origin");
+  });
+
+  it("returns Paymaster errors to the trusted popup through CORS", async () => {
+    const response = await createCoreApp({
+      proxyPaymaster: () =>
+        Promise.reject(
+          new Error("provider response intentionally failed in this test")
+        )
+    }).request(
+      "/api/sponsor",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Origin: "https://keys.coinbase.com"
+        },
+        body: "{}"
+      },
+      sponsorEnv
+    );
+    expect(response.status).toBe(500);
+    expect(response.headers.get("access-control-allow-origin")).toBe(
+      "https://keys.coinbase.com"
+    );
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "internal_error" }
+    });
+  });
+
+  it("rejects untrusted Paymaster origins and preflight headers", async () => {
+    let proxyCalled = false;
+    const paymasterApp = createCoreApp({
+      proxyPaymaster: () => {
+        proxyCalled = true;
+        return Promise.resolve({ id: 1, result: { paymasterAndData: "0x12" } });
+      }
+    });
+    const originResponse = await paymasterApp.request(
+      "/api/sponsor",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Origin: "https://example.com"
+        },
+        body: "{}"
+      },
+      sponsorEnv
+    );
+    expect(originResponse.status).toBe(403);
+    expect(originResponse.headers.get("access-control-allow-origin")).toBeNull();
+
+    const headerResponse = await paymasterApp.request(
+      "/api/sponsor",
+      {
+        method: "OPTIONS",
+        headers: {
+          "Access-Control-Request-Headers": "authorization, content-type",
+          "Access-Control-Request-Method": "POST",
+          Origin: "https://keys.coinbase.com"
+        }
+      },
+      sponsorEnv
+    );
+    expect(headerResponse.status).toBe(403);
+    expect(proxyCalled).toBe(false);
   });
 
   it("fails closed at the Paymaster endpoint while sponsorship is disabled", async () => {

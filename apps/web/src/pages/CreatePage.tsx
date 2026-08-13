@@ -8,7 +8,7 @@ import {
   type Address,
   type Hex
 } from "viem";
-import { useSendCalls, useSendTransaction } from "wagmi";
+import { useCapabilities, useSendCalls, useSendTransaction } from "wagmi";
 import type { Session } from "../auth-types";
 import { useI18n, type MessageKey } from "../i18n-context";
 import { localeTag } from "../locale";
@@ -19,6 +19,7 @@ import { TurnstileWidget } from "../components/TurnstileWidget";
 import {
   getCreateConfirmationState,
   getCreateFundingMode,
+  getSponsorCapabilityState,
   getCreateWalletState
 } from "../create-wallet-state";
 import { getCreateHandoffStep } from "../handoff-role";
@@ -269,12 +270,32 @@ export function CreatePage({
     authenticatedAddress
   );
   const readyToRecord = walletState === "ready";
-  const sponsorshipAvailable =
+  const sponsorshipConfigured =
     sponsorshipEnabled &&
     registryAvailable &&
     connectorId === "baseAccount" &&
     turnstileSiteKey !== undefined &&
     builderAttribution !== undefined;
+  const {
+    data: walletCapabilities,
+    isError: walletCapabilitiesFailed
+  } = useCapabilities({
+    chainId: BASE_SEPOLIA_DEPLOYMENT.chainId,
+    query: {
+      enabled: sponsorshipConfigured && address !== undefined
+    }
+  });
+  const sponsorCapabilityState = getSponsorCapabilityState(
+    sponsorshipConfigured,
+    walletCapabilities !== undefined,
+    walletCapabilities?.paymasterService?.supported === true,
+    walletCapabilitiesFailed
+  );
+  const sponsorshipAvailable = sponsorCapabilityState === "supported";
+  const sponsorshipCapabilityChecking =
+    sponsorCapabilityState === "checking";
+  const sponsorshipCapabilityUnavailable =
+    sponsorCapabilityState === "unsupported";
   const fundingMode = getCreateFundingMode(
     sponsorshipAvailable,
     walletFeeChosen
@@ -454,6 +475,21 @@ export function CreatePage({
         !authenticatedAddress)
     ) {
       setStatus(t("create.status.signInRequired"));
+      return;
+    }
+    if (
+      pendingConfirmation === undefined &&
+      sponsorshipConfigured &&
+      !sponsorshipAvailable &&
+      !walletFeeChosen
+    ) {
+      setStatus(
+        t(
+          sponsorshipCapabilityChecking
+            ? "create.status.sponsorCapabilityChecking"
+            : "create.status.sponsorCapabilityUnavailable"
+        )
+      );
       return;
     }
 
@@ -921,64 +957,132 @@ export function CreatePage({
                   )}
                 </>
               )}
-              {sponsorshipAvailable &&
+              {sponsorshipConfigured &&
                 pendingConfirmation === undefined &&
                 prepared !== undefined &&
                 readyToRecord && (
                   <div className="sponsor-choice">
-                    <div>
-                      <strong>{t("create.sponsorTitle")}</strong>
-                      <p>{t("create.sponsorIntro")}</p>
-                    </div>
-                    {fundingMode === "sponsored" ? (
+                    {sponsorshipCapabilityChecking ? (
                       <>
-                        {sponsorGrant === undefined ? (
-                          <TurnstileWidget
-                            accessibleLabel={t("create.sponsorCheckLabel")}
-                            onError={handleTurnstileError}
-                            onTokenChange={handleTurnstileTokenChange}
-                            resetKey={turnstileResetKey}
-                            siteKey={turnstileSiteKey}
-                          />
-                        ) : (
-                          <p className="sponsor-ready" role="status">
-                            {t("create.sponsorReady")}
-                          </p>
-                        )}
-                        {sponsorFailure !== undefined && (
-                          <p className="sponsor-error" role="alert">
-                            {sponsorFailure}
-                          </p>
-                        )}
-                        <button
-                          type="button"
-                          className="secondary sponsor-choice-action"
-                          onClick={() => {
-                            setWalletFeeChosen(true);
-                            setStatus(t("create.status.walletFeeSelected"));
-                          }}
-                          disabled={busy}
+                        <div>
+                          <strong>
+                            {t("create.sponsorCapabilityCheckingTitle")}
+                          </strong>
+                          <p>{t("create.sponsorCapabilityCheckingBody")}</p>
+                        </div>
+                        <div
+                          className="sponsor-capability-progress"
+                          role="status"
                         >
-                          {t("create.useWalletFee")}
-                        </button>
+                          <span
+                            className="confirmation-spinner compact"
+                            aria-hidden="true"
+                          />
+                          <span>
+                            {t("create.sponsorCapabilityCheckingStatus")}
+                          </span>
+                        </div>
+                        {walletFeeChosen ? (
+                          <p className="sponsor-wallet-paid">
+                            {t("create.walletFeeSelected")}
+                          </p>
+                        ) : (
+                          <button
+                            type="button"
+                            className="secondary sponsor-choice-action"
+                            onClick={() => {
+                              setWalletFeeChosen(true);
+                              setStatus(t("create.status.walletFeeSelected"));
+                            }}
+                            disabled={busy}
+                          >
+                            {t("create.useWalletFee")}
+                          </button>
+                        )}
+                      </>
+                    ) : sponsorshipCapabilityUnavailable ? (
+                      <>
+                        <div>
+                          <strong>
+                            {t("create.sponsorCapabilityUnavailableTitle")}
+                          </strong>
+                          <p>{t("create.sponsorCapabilityUnavailableBody")}</p>
+                        </div>
+                        {walletFeeChosen ? (
+                          <p className="sponsor-wallet-paid">
+                            {t("create.walletFeeSelected")}
+                          </p>
+                        ) : (
+                          <button
+                            type="button"
+                            className="secondary sponsor-choice-action"
+                            onClick={() => {
+                              setWalletFeeChosen(true);
+                              setStatus(t("create.status.walletFeeSelected"));
+                            }}
+                            disabled={busy}
+                          >
+                            {t("create.useWalletFee")}
+                          </button>
+                        )}
                       </>
                     ) : (
                       <>
-                        <p className="sponsor-wallet-paid">
-                          {t("create.walletFeeSelected")}
-                        </p>
-                        <button
-                          type="button"
-                          className="secondary sponsor-choice-action"
-                          onClick={() => {
-                            setWalletFeeChosen(false);
-                            setSponsorFailure(undefined);
-                            setStatus(t("create.status.sponsorSelected"));
-                          }}
-                          disabled={busy}
-                        >
-                          {t("create.trySponsor")}
-                        </button>
+                        <div>
+                          <strong>{t("create.sponsorTitle")}</strong>
+                          <p>{t("create.sponsorIntro")}</p>
+                        </div>
+                        {fundingMode === "sponsored" ? (
+                          <>
+                            {sponsorGrant === undefined ? (
+                              <TurnstileWidget
+                                accessibleLabel={t("create.sponsorCheckLabel")}
+                                onError={handleTurnstileError}
+                                onTokenChange={handleTurnstileTokenChange}
+                                resetKey={turnstileResetKey}
+                                siteKey={turnstileSiteKey}
+                              />
+                            ) : (
+                              <p className="sponsor-ready" role="status">
+                                {t("create.sponsorReady")}
+                              </p>
+                            )}
+                            {sponsorFailure !== undefined && (
+                              <p className="sponsor-error" role="alert">
+                                {sponsorFailure}
+                              </p>
+                            )}
+                            <button
+                              type="button"
+                              className="secondary sponsor-choice-action"
+                              onClick={() => {
+                                setWalletFeeChosen(true);
+                                setStatus(t("create.status.walletFeeSelected"));
+                              }}
+                              disabled={busy}
+                            >
+                              {t("create.useWalletFee")}
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <p className="sponsor-wallet-paid">
+                              {t("create.walletFeeSelected")}
+                            </p>
+                            <button
+                              type="button"
+                              className="secondary sponsor-choice-action"
+                              onClick={() => {
+                                setWalletFeeChosen(false);
+                                setSponsorFailure(undefined);
+                                setStatus(t("create.status.sponsorSelected"));
+                              }}
+                              disabled={busy}
+                            >
+                              {t("create.trySponsor")}
+                            </button>
+                          </>
+                        )}
                       </>
                     )}
                   </div>
@@ -997,18 +1101,23 @@ export function CreatePage({
                     (prepared === undefined ||
                       !readyToRecord ||
                       !registryAvailable ||
+                      (sponsorshipConfigured &&
+                        !sponsorshipAvailable &&
+                        !walletFeeChosen) ||
                       (fundingMode === "sponsored" &&
                         sponsorGrant === undefined &&
                         turnstileToken === undefined)))
                 }
               >
                 {confirmationState === "idle"
-                  ? t(
-                      fundingMode === "sponsored"
-                        ? "create.recordSponsored"
-                        : "create.recordOn",
-                      { network: selectedNetwork.name }
-                    )
+                  ? sponsorshipCapabilityChecking && !walletFeeChosen
+                    ? t("create.checkingSponsor")
+                    : t(
+                        fundingMode === "sponsored"
+                          ? "create.recordSponsored"
+                          : "create.recordOn",
+                        { network: selectedNetwork.name }
+                      )
                   : confirmationState === "confirming"
                     ? (
                         <span className="confirmation-button-content">
@@ -1023,12 +1132,14 @@ export function CreatePage({
               </button>
               <p className="muted">
                 {registryAvailable
-                  ? t(
-                      fundingMode === "sponsored"
-                        ? "create.sponsorFeeNotice"
-                        : "create.feeNotice",
-                      { network: selectedNetwork.name }
-                    )
+                  ? sponsorshipCapabilityChecking && !walletFeeChosen
+                    ? t("create.sponsorCapabilityCheckingBody")
+                    : t(
+                        fundingMode === "sponsored"
+                          ? "create.sponsorFeeNotice"
+                          : "create.feeNotice",
+                        { network: selectedNetwork.name }
+                      )
                   : t("create.noMainnetTransaction")}
               </p>
             </>
