@@ -272,13 +272,10 @@ async function defaultVerifySiweSignature(arguments_: VerifyArguments): Promise<
         : undefined;
   if (chain === undefined) return false;
   const client = createPublicClient({ chain, transport: http() });
-  return client.verifySiweMessage({
+  return client.verifyMessage({
     address: arguments_.address,
-    domain: arguments_.domain,
     message: arguments_.message,
-    nonce: arguments_.nonce,
-    signature: arguments_.signature,
-    time: arguments_.now
+    signature: arguments_.signature
   });
 }
 
@@ -373,6 +370,26 @@ function diagnosticRoute(path: string): string {
   if (path.startsWith("/api/handoff/")) return "handoff";
   if (path.startsWith("/api/health")) return "health";
   return path.startsWith("/api/") ? "other_api" : "non_api";
+}
+type AuthenticationRejectionStage =
+  | "request_shape"
+  | "message_parse"
+  | "chain"
+  | "siwe_policy"
+  | "nonce"
+  | "signature"
+  | "nonce_race";
+
+function authenticationRejected(
+  stage: AuthenticationRejectionStage,
+  chainId?: number
+): ApiError {
+  console.warn(JSON.stringify({
+    event: "authentication_rejected",
+    stage,
+    ...(chainId === undefined ? {} : { chainId })
+  }));
+  return new ApiError(400, "invalid_authentication", "Authentication failed.");
 }
 
 export function createCoreApp(dependencies: Dependencies = {}) {
@@ -521,19 +538,19 @@ export function createCoreApp(dependencies: Dependencies = {}) {
       body.signature.length > 16_384 ||
       !/^0x(?:[0-9a-fA-F]{2})+$/u.test(body.signature)
     ) {
-      throw new ApiError(400, "invalid_authentication", "Authentication failed.");
+      throw authenticationRejected("request_shape");
     }
 
     let fields: ReturnType<typeof parseSiweMessage>;
     try {
       fields = parseSiweMessage(body.message);
     } catch {
-      throw new ApiError(400, "invalid_authentication", "Authentication failed.");
+      throw authenticationRejected("message_parse");
     }
 
     const nowDate = new Date();
     if (!isAllowedChainId(fields.chainId, config)) {
-      throw new ApiError(400, "invalid_authentication", "Authentication failed.");
+      throw authenticationRejected("chain", fields.chainId);
     }
     const chainId = fields.chainId;
     const policyError = validateSiweFields(fields, {
@@ -550,7 +567,7 @@ export function createCoreApp(dependencies: Dependencies = {}) {
       !isAddress(fields.address) ||
       typeof fields.nonce !== "string"
     ) {
-      throw new ApiError(400, "invalid_authentication", "Authentication failed.");
+      throw authenticationRejected("siwe_policy", chainId);
     }
 
     const nonceHash = await sha256Hex(fields.nonce);
@@ -567,7 +584,7 @@ export function createCoreApp(dependencies: Dependencies = {}) {
       nonceRow.used_at !== null ||
       nonceRow.expires_at <= now
     ) {
-      throw new ApiError(400, "invalid_authentication", "Authentication failed.");
+      throw authenticationRejected("nonce", chainId);
     }
 
     const valid = await verifySiweSignature({
@@ -580,7 +597,7 @@ export function createCoreApp(dependencies: Dependencies = {}) {
       now: nowDate
     });
     if (!valid) {
-      throw new ApiError(400, "invalid_authentication", "Authentication failed.");
+      throw authenticationRejected("signature", chainId);
     }
 
     const consumed = await context.env.DB.prepare(
@@ -590,7 +607,7 @@ export function createCoreApp(dependencies: Dependencies = {}) {
       .bind(now, nonceHash, now)
       .run();
     if (consumed.meta.changes !== 1) {
-      throw new ApiError(400, "invalid_authentication", "Authentication failed.");
+      throw authenticationRejected("nonce_race", chainId);
     }
 
     const token = randomToken();

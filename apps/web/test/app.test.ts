@@ -78,6 +78,37 @@ describe("Core Worker surface", () => {
     expect(response.status).toBe(404);
   });
 
+  it("logs only a bounded stage when authentication is rejected", async () => {
+    const warningLog = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const response = await createCoreApp().request(
+      "/api/auth/verify",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Origin: "http://localhost:5173"
+        },
+        body: JSON.stringify({ message: 1, signature: "0x12" })
+      },
+      configuredEnv
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: {
+        code: "invalid_authentication",
+        message: "Authentication failed."
+      }
+    });
+    expect(warningLog).toHaveBeenCalledOnce();
+    const logged = String(warningLog.mock.calls[0]?.[0]);
+    expect(logged).toBe(JSON.stringify({
+      event: "authentication_rejected",
+      stage: "request_shape"
+    }));
+    expect(logged).not.toContain("0x12");
+  });
+
 
   it("rejects authentication on a chain outside the configured Base allowlist", async () => {
     const response = await app.request(
