@@ -29,7 +29,10 @@ import {
   MAX_FILE_SIZE_BYTES,
   randomBytes32
 } from "../lib/crypto";
-import { BASE_SEPOLIA_DEPLOYMENT } from "../lib/deployment";
+import {
+  BASE_SEPOLIA_DEPLOYMENT,
+  getDeployment
+} from "../lib/deployment";
 import { createHandoffUrl } from "../lib/handoff";
 import {
   cacheCreatedVerificationPackage,
@@ -49,8 +52,9 @@ import {
   isRegistryWriteAvailable,
   type SupportedChainId
 } from "../lib/networks";
-import { baseSepoliaPublicClient } from "../lib/onchain";
+import { getDeploymentPublicClient } from "../lib/onchain";
 import { deriveStampId, registryAbi } from "../lib/registry";
+import { createStampPath } from "../lib/routes";
 import {
   createSponsorIdempotencyKey,
   type SponsorGrantResponse
@@ -79,6 +83,7 @@ type PreparedStamp = {
 };
 
 type PendingConfirmation = {
+  chainId: SupportedChainId;
   creator: Address;
   expectedStampId: Hex;
   prepared: PreparedStamp;
@@ -152,13 +157,15 @@ async function waitForAutomaticConfirmation(
   eventMismatchMessage: string
 ): Promise<ConfirmedRegistryRecord> {
   const deadline = Date.now() + CONFIRMATION_WINDOW_MS;
+  const deployment = getDeployment(confirmation.chainId);
+  const publicClient = getDeploymentPublicClient(confirmation.chainId);
   let lastError: unknown;
 
   while (Date.now() < deadline) {
     let events;
     try {
-      events = await baseSepoliaPublicClient.getContractEvents({
-        address: BASE_SEPOLIA_DEPLOYMENT.registryAddress,
+      events = await publicClient.getContractEvents({
+        address: deployment.registryAddress,
         abi: registryAbi,
         eventName: "StampCreated",
         args: { stampId: confirmation.expectedStampId },
@@ -186,7 +193,7 @@ async function waitForAutomaticConfirmation(
     }
 
     try {
-      const block = await baseSepoliaPublicClient.getBlock({
+      const block = await publicClient.getBlock({
         blockNumber: event.blockNumber
       });
       return {
@@ -243,6 +250,8 @@ export function CreatePage({
   const { mutateAsync: sendTransactionAsync } = useSendTransaction();
   const { mutateAsync: sendCallsAsync } = useSendCalls();
   const selectedNetwork = getBaseNetwork(selectedChainId);
+  const deployment = getDeployment(selectedChainId);
+  const deploymentPublicClient = getDeploymentPublicClient(selectedChainId);
   const registryAvailable = isRegistryWriteAvailable(
     selectedChainId,
     selectedNetwork.registryAvailable,
@@ -277,6 +286,7 @@ export function CreatePage({
   );
   const readyToRecord = walletState === "ready";
   const sponsorshipConfigured =
+    selectedChainId === BASE_SEPOLIA_DEPLOYMENT.chainId &&
     sponsorshipEnabled &&
     registryAvailable &&
     connectorId === "baseAccount" &&
@@ -312,8 +322,10 @@ export function CreatePage({
     busy
   );
 
+  const handoffAvailable =
+    package_?.chainId === BASE_SEPOLIA_DEPLOYMENT.chainId;
   const handoffUrl =
-    package_ === undefined
+    package_ === undefined || !handoffAvailable
       ? ""
       : createHandoffUrl(
           window.location.origin,
@@ -321,9 +333,9 @@ export function CreatePage({
           package_.commitment.contentSalt
         );
   const shareMessage =
-    package_ === undefined
-      ? ""
-      : t("create.shareMessage", { url: handoffUrl });
+    handoffAvailable
+      ? t("create.shareMessage", { url: handoffUrl })
+      : "";
   const webShareAvailable =
     typeof Reflect.get(navigator, "share") === "function";
 
@@ -524,14 +536,15 @@ export function CreatePage({
         }
         const stampNonceHex = bytesToHex(prepared.stampNonce);
         const expectedStampId = deriveStampId({
-          chainId: BASE_SEPOLIA_DEPLOYMENT.chainId,
-          registryAddress: BASE_SEPOLIA_DEPLOYMENT.registryAddress,
+          chainId: deployment.chainId,
+          registryAddress: deployment.registryAddress,
           creator: address,
           contentCommitment: prepared.contentCommitment,
           metadataHash: prepared.metadataHash,
           stampNonce: stampNonceHex
         });
-        const searchFromBlock = await baseSepoliaPublicClient.getBlockNumber();
+        const searchFromBlock =
+          await deploymentPublicClient.getBlockNumber();
 
         let submittedHash: Hex | undefined;
         let submittedReference: string;
@@ -578,17 +591,18 @@ export function CreatePage({
           });
           submittedHash = await sendTransactionAsync({
             account: address,
-            chainId: BASE_SEPOLIA_DEPLOYMENT.chainId,
+            chainId: deployment.chainId,
             data:
               builderAttribution === undefined
                 ? registryCall
                 : concatHex([registryCall, builderAttribution.dataSuffix]),
-            to: BASE_SEPOLIA_DEPLOYMENT.registryAddress
+            to: deployment.registryAddress
           });
           submittedReference = submittedHash;
         }
 
         activeConfirmation = {
+          chainId: deployment.chainId,
           creator: address,
           expectedStampId,
           prepared,
@@ -600,10 +614,13 @@ export function CreatePage({
       }
 
       const {
+        chainId: confirmationChainId,
         creator,
         expectedStampId,
         prepared: confirmedPrepared
       } = activeConfirmation;
+      const confirmationDeployment =
+        getDeployment(confirmationChainId);
 
       setStatus(t("create.status.waiting"));
       const confirmedRecord = await waitForAutomaticConfirmation(
@@ -615,9 +632,9 @@ export function CreatePage({
         schemaVersion: 1,
         type: "BaseStampVerificationPackage",
         app: "BaseStamp",
-        network: "base-sepolia",
-        chainId: 84532,
-        contractAddress: BASE_SEPOLIA_DEPLOYMENT.registryAddress,
+        network: confirmationDeployment.network,
+        chainId: confirmationDeployment.chainId,
+        contractAddress: confirmationDeployment.registryAddress,
         stampId: expectedStampId,
         transactionHash: confirmedRecord.transactionHash,
         blockNumber: Number(confirmedRecord.blockNumber),
@@ -636,7 +653,8 @@ export function CreatePage({
         metadata: confirmedPrepared.metadata,
         metadataHash: confirmedPrepared.metadataHash,
         verificationUrl:
-          window.location.origin + "/stamps/" + expectedStampId
+          window.location.origin +
+          createStampPath(confirmationChainId, expectedStampId)
       };
       setPackage(nextPackage);
       cacheCreatedVerificationPackage(nextPackage);
@@ -906,7 +924,9 @@ export function CreatePage({
               <div>
                 <dt>{t("create.registry")}</dt>
                 <dd>
-                  {registryAvailable ? shortHex(BASE_SEPOLIA_DEPLOYMENT.registryAddress) : t("common.notDeployed")}
+                  {registryAvailable
+                    ? shortHex(deployment.registryAddress)
+                    : t("common.notDeployed")}
                 </dd>
               </div>
             </dl>
@@ -953,7 +973,8 @@ export function CreatePage({
                   {pendingConfirmation.submittedHash !== undefined && (
                     <a
                       href={
-                        "https://sepolia.basescan.org/tx/" +
+                        getDeployment(pendingConfirmation.chainId).explorerUrl +
+                        "/tx/" +
                         pendingConfirmation.submittedHash
                       }
                       target="_blank"
@@ -1161,7 +1182,7 @@ export function CreatePage({
                 <span>{t("create.transactionHash")}</span>
                 <a
                   href={
-                    BASE_SEPOLIA_DEPLOYMENT.explorerUrl +
+                    getDeployment(package_.chainId).explorerUrl +
                     "/tx/" +
                     package_.transactionHash
                   }
@@ -1182,7 +1203,10 @@ export function CreatePage({
               >
                 {t("create.downloadPackage")}
               </button>
-              <div className="share-panel">
+              <div
+                className="share-panel"
+                hidden={!handoffAvailable}
+              >
                 <h3>{t("create.shareTitle")}</h3>
                 <p className="share-warning">{t("create.shareWarning")}</p>
                 <span className="share-label">
@@ -1289,7 +1313,7 @@ export function CreatePage({
                 )}
               </div>
               <a
-                href={"/stamps/" + package_.stampId}
+                href={package_.verificationUrl}
                 target="_blank"
                 rel="noopener noreferrer"
               >

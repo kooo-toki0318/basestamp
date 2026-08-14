@@ -32,6 +32,7 @@ credentials*.json
 # Local agent state
 .codex/
 .agents/
+Agents.md
 
 # Private local planning documents
 basestamp_mvp_codex_brief_v*.md

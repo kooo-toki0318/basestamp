@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useI18n } from "../i18n-context";
 import { HandoffStory } from "../components/HandoffStory";
 import { cacheVerificationPackage } from "../local-package";
+import { createStampPath } from "../lib/routes";
 import {
   MAX_PACKAGE_BYTES,
   parseVerificationPackage
@@ -18,7 +19,9 @@ export function VerifyStartPage() {
     }
 
     const frame = window.requestAnimationFrame(() => {
-      document.getElementById("verify-json")?.scrollIntoView({ block: "center" });
+      document
+        .getElementById("verify-json")
+        ?.scrollIntoView({ block: "center" });
     });
 
     return () => {
@@ -26,8 +29,11 @@ export function VerifyStartPage() {
     };
   }, []);
 
-  async function beginVerification(packageFile: File | undefined): Promise<void> {
+  async function beginVerification(
+    packageFile: File | undefined
+  ): Promise<void> {
     if (packageFile === undefined) return;
+
     if (packageFile.size > MAX_PACKAGE_BYTES) {
       setStatus(t("verifyStart.status.tooLarge"));
       return;
@@ -35,10 +41,17 @@ export function VerifyStartPage() {
 
     setBusy(true);
     setStatus(t("verifyStart.status.checking"));
+
     try {
-      const package_ = await parseVerificationPackage(await packageFile.text());
+      const package_ = await parseVerificationPackage(
+        await packageFile.text()
+      );
+
       cacheVerificationPackage(package_);
-      window.location.assign("/stamps/" + package_.stampId);
+
+      window.location.assign(
+        createStampPath(package_.chainId, package_.stampId)
+      );
     } catch (error) {
       setStatus(
         error instanceof Error
@@ -77,7 +90,9 @@ export function VerifyStartPage() {
         </section>
 
         <section className="panel">
-          <span className="step-label">{t("verifyStart.needsTitle")}</span>
+          <span className="step-label">
+            {t("verifyStart.needsTitle")}
+          </span>
           <ol className="handoff-list">
             <li>{t("verifyStart.need1")}</li>
             <li>{t("verifyStart.need2")}</li>
@@ -86,7 +101,11 @@ export function VerifyStartPage() {
         </section>
       </div>
 
-      <p className="status prominent" role="status" aria-live="polite">
+      <p
+        className="status prominent"
+        role="status"
+        aria-live="polite"
+      >
         {status}
       </p>
     </section>

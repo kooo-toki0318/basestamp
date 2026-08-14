@@ -10,7 +10,8 @@ import {
   hexToBytes32,
   MAX_FILE_SIZE_BYTES
 } from "../lib/crypto";
-import { BASE_SEPOLIA_DEPLOYMENT } from "../lib/deployment";
+import { getDeployment } from "../lib/deployment";
+import type { SupportedChainId } from "../lib/networks";
 import {
   readRegistryStamp,
   verifyPackageOnchain
@@ -29,6 +30,7 @@ import {
 } from "../lib/verification-package";
 
 type StampPageProperties = {
+  chainId: SupportedChainId;
   stampId: Hex;
 };
 
@@ -36,8 +38,12 @@ function shortHex(value: string): string {
   return value.slice(0, 10) + "…" + value.slice(-8);
 }
 
-export function StampPage({ stampId }: StampPageProperties) {
+export function StampPage({
+  chainId,
+  stampId
+}: StampPageProperties) {
   const { locale, t } = useI18n();
+  const deployment = getDeployment(chainId);
   const [stamp, setStamp] = useState<RegistryStamp>();
   const [package_, setPackage] = useState<VerificationPackage>();
   const [file, setFile] = useState<File>();
@@ -47,17 +53,31 @@ export function StampPage({ stampId }: StampPageProperties) {
 
   useEffect(() => {
     let active = true;
-    void readRegistryStamp(stampId)
+
+    void readRegistryStamp(stampId, deployment)
       .then(async (nextStamp) => {
         if (!active) return;
+
         setStamp(nextStamp);
         setStatus(t("stamp.status.loaded"));
+
         const cachedSource = readCachedVerificationPackage(stampId);
         if (cachedSource === undefined) return;
+
         setBusy(true);
+
         try {
           const parsed = await parseVerificationPackage(cachedSource);
+
+          if (
+            parsed.chainId !== chainId ||
+            parsed.stampId !== stampId
+          ) {
+            throw new Error("Cached verification package does not match route.");
+          }
+
           const verifiedStamp = await verifyPackageOnchain(parsed);
+
           setStamp(verifiedStamp);
           setPackage(parsed);
           setStatus(t("stamp.status.restored"));
@@ -71,34 +91,52 @@ export function StampPage({ stampId }: StampPageProperties) {
         if (!active) return;
         setStatus(t("stamp.status.notFound"));
       });
+
     return () => {
       active = false;
     };
-  }, [stampId, t]);
+  }, [chainId, deployment, stampId, t]);
 
-  async function loadPackage(packageFile: File | undefined): Promise<void> {
+  async function loadPackage(
+    packageFile: File | undefined
+  ): Promise<void> {
     setPackage(undefined);
     setFile(undefined);
     setMatch(undefined);
+
     if (packageFile === undefined) return;
+
     if (packageFile.size > MAX_PACKAGE_BYTES) {
       setStatus(t("stamp.status.packageTooLarge"));
       return;
     }
 
     setBusy(true);
+
     try {
-      const parsed = await parseVerificationPackage(await packageFile.text());
-      if (parsed.stampId !== stampId) {
+      const parsed = await parseVerificationPackage(
+        await packageFile.text()
+      );
+
+      if (
+        parsed.chainId !== chainId ||
+        parsed.stampId !== stampId
+      ) {
         throw new Error(t("stamp.status.idMismatch"));
       }
+
       const verifiedStamp = await verifyPackageOnchain(parsed);
+
       setStamp(verifiedStamp);
       setPackage(parsed);
       cacheVerificationPackage(parsed);
       setStatus(t("stamp.status.packageVerified"));
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : t("stamp.status.packageFailed"));
+      setStatus(
+        error instanceof Error
+          ? error.message
+          : t("stamp.status.packageFailed")
+      );
     } finally {
       setBusy(false);
     }
@@ -110,17 +148,24 @@ export function StampPage({ stampId }: StampPageProperties) {
   }
 
   async function verifyFile(): Promise<void> {
-    if (file === undefined || package_ === undefined || stamp === undefined) {
+    if (
+      file === undefined ||
+      package_ === undefined ||
+      stamp === undefined
+    ) {
       return;
     }
+
     setBusy(true);
     setMatch(undefined);
+
     try {
       if (file.size !== package_.commitment.fileSize) {
         setMatch(false);
         setStatus(t("stamp.status.fileSizeMismatch"));
         return;
       }
+
       const result = await calculateFileCommitment(
         file,
         base64UrlToBytes32(package_.commitment.contentSalt),
@@ -132,6 +177,7 @@ export function StampPage({ stampId }: StampPageProperties) {
           );
         }
       );
+
       const packageMatch = constantTimeEqual(
         hexToBytes32(result.contentCommitment),
         hexToBytes32(package_.commitment.contentCommitment)
@@ -141,6 +187,7 @@ export function StampPage({ stampId }: StampPageProperties) {
         hexToBytes(stamp.contentCommitment)
       );
       const nextMatch = packageMatch && registryMatch;
+
       setMatch(nextMatch);
       setStatus(
         nextMatch
@@ -148,7 +195,11 @@ export function StampPage({ stampId }: StampPageProperties) {
           : t("stamp.status.noMatch")
       );
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : t("stamp.status.localFailed"));
+      setStatus(
+        error instanceof Error
+          ? error.message
+          : t("stamp.status.localFailed")
+      );
     } finally {
       setBusy(false);
     }
@@ -168,21 +219,42 @@ export function StampPage({ stampId }: StampPageProperties) {
         <section className="panel">
           <span className="step-label">{t("stamp.step1")}</span>
           <dl className="technical-list">
-            <div><dt>{t("stamp.id")}</dt><dd title={stampId}>{shortHex(stampId)}</dd></div>
-            <div><dt>{t("stamp.registry")}</dt><dd title={BASE_SEPOLIA_DEPLOYMENT.registryAddress}>{shortHex(BASE_SEPOLIA_DEPLOYMENT.registryAddress)}</dd></div>
+            <div>
+              <dt>{t("stamp.id")}</dt>
+              <dd title={stampId}>{shortHex(stampId)}</dd>
+            </div>
+            <div>
+              <dt>{t("stamp.registry")}</dt>
+              <dd title={deployment.registryAddress}>
+                {shortHex(deployment.registryAddress)}
+              </dd>
+            </div>
             {stamp !== undefined && (
               <>
-                <div><dt>{t("stamp.creator")}</dt><dd title={stamp.creator}>{shortHex(stamp.creator)}</dd></div>
-                <div><dt>{t("stamp.created")}</dt><dd>{formatUnixSeconds(stamp.createdAt)}</dd></div>
-                <div><dt>{t("stamp.commitment")}</dt><dd title={stamp.contentCommitment}>{shortHex(stamp.contentCommitment)}</dd></div>
+                <div>
+                  <dt>{t("stamp.creator")}</dt>
+                  <dd title={stamp.creator}>
+                    {shortHex(stamp.creator)}
+                  </dd>
+                </div>
+                <div>
+                  <dt>{t("stamp.created")}</dt>
+                  <dd>{formatUnixSeconds(stamp.createdAt)}</dd>
+                </div>
+                <div>
+                  <dt>{t("stamp.commitment")}</dt>
+                  <dd title={stamp.contentCommitment}>
+                    {shortHex(stamp.contentCommitment)}
+                  </dd>
+                </div>
               </>
             )}
           </dl>
           <a
             href={
-              BASE_SEPOLIA_DEPLOYMENT.explorerUrl +
+              deployment.explorerUrl +
               "/address/" +
-              BASE_SEPOLIA_DEPLOYMENT.registryAddress
+              deployment.registryAddress
             }
             target="_blank"
             rel="noreferrer"
@@ -206,13 +278,22 @@ export function StampPage({ stampId }: StampPageProperties) {
                   disabled={busy || stamp === undefined}
                 />
               </label>
-              <p className="muted">{t("stamp.untrustedNotice")}</p>
+              <p className="muted">
+                {t("stamp.untrustedNotice")}
+              </p>
             </>
           ) : (
             <div className="package-loaded">
-              <span className="package-loaded-icon" aria-hidden="true">✓</span>
+              <span
+                className="package-loaded-icon"
+                aria-hidden="true"
+              >
+                ✓
+              </span>
               <strong>{t("stamp.packageLoadedTitle")}</strong>
-              <p className="muted">{t("stamp.packageLoadedBody")}</p>
+              <p className="muted">
+                {t("stamp.packageLoadedBody")}
+              </p>
               <button
                 type="button"
                 className="secondary"
@@ -233,7 +314,9 @@ export function StampPage({ stampId }: StampPageProperties) {
               type="file"
               onChange={(event) => {
                 const nextFile = event.target.files?.[0];
+
                 setMatch(undefined);
+
                 if (
                   nextFile !== undefined &&
                   nextFile.size <= MAX_FILE_SIZE_BYTES
@@ -241,6 +324,7 @@ export function StampPage({ stampId }: StampPageProperties) {
                   setFile(nextFile);
                 } else {
                   setFile(undefined);
+
                   if (nextFile !== undefined) {
                     setStatus(t("stamp.status.fileTooLarge"));
                   }
@@ -252,10 +336,15 @@ export function StampPage({ stampId }: StampPageProperties) {
           <button
             type="button"
             onClick={() => void verifyFile()}
-            disabled={busy || file === undefined || package_ === undefined}
+            disabled={
+              busy ||
+              file === undefined ||
+              package_ === undefined
+            }
           >
             {t("stamp.verifyLocally")}
           </button>
+
           {match !== undefined && (
             <div
               className={
@@ -263,50 +352,73 @@ export function StampPage({ stampId }: StampPageProperties) {
                   ? "verification-result success"
                   : "verification-result failure"
               }
-              aria-label={match ? t("stamp.match") : t("stamp.noMatch")}
+              aria-label={
+                match ? t("stamp.match") : t("stamp.noMatch")
+              }
             >
               <div className="verification-result-heading">
-                <span aria-hidden="true">{match ? "✓" : "×"}</span>
+                <span aria-hidden="true">
+                  {match ? "✓" : "×"}
+                </span>
                 <h3>
-                  {t(match ? "stamp.matchTitle" : "stamp.noMatchTitle")}
+                  {t(
+                    match
+                      ? "stamp.matchTitle"
+                      : "stamp.noMatchTitle"
+                  )}
                 </h3>
               </div>
               <p>
-                {t(match ? "stamp.matchBody" : "stamp.noMatchBody")}
+                {t(
+                  match
+                    ? "stamp.matchBody"
+                    : "stamp.noMatchBody"
+                )}
               </p>
-              {match && package_ !== undefined && stamp !== undefined && (
-                <>
-                  <strong className="result-summary-label">
-                    {t("stamp.resultSummary")}
-                  </strong>
-                  <dl className="result-summary">
-                    <div>
-                      <dt>{t("stamp.resultCreated")}</dt>
-                      <dd>{formatUnixSeconds(stamp.createdAt)}</dd>
-                    </div>
-                    <div>
-                      <dt>{t("stamp.resultCreator")}</dt>
-                      <dd title={stamp.creator}>{shortHex(stamp.creator)}</dd>
-                    </div>
-                    <div>
-                      <dt>{t("stamp.resultFileSize")}</dt>
-                      <dd>
-                        {package_.commitment.fileSize.toLocaleString(
-                          localeTag(locale)
-                        )}{" "}
-                        {t("common.bytes")}
-                      </dd>
-                    </div>
-                  </dl>
-                </>
-              )}
+
+              {match &&
+                package_ !== undefined &&
+                stamp !== undefined && (
+                  <>
+                    <strong className="result-summary-label">
+                      {t("stamp.resultSummary")}
+                    </strong>
+                    <dl className="result-summary">
+                      <div>
+                        <dt>{t("stamp.resultCreated")}</dt>
+                        <dd>
+                          {formatUnixSeconds(stamp.createdAt)}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>{t("stamp.resultCreator")}</dt>
+                        <dd title={stamp.creator}>
+                          {shortHex(stamp.creator)}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>{t("stamp.resultFileSize")}</dt>
+                        <dd>
+                          {package_.commitment.fileSize.toLocaleString(
+                            localeTag(locale)
+                          )}{" "}
+                          {t("common.bytes")}
+                        </dd>
+                      </div>
+                    </dl>
+                  </>
+                )}
             </div>
           )}
         </section>
       </div>
 
       <div className="notice">{t("stamp.boundary")}</div>
-      <p className="status prominent" role="status" aria-live="polite">
+      <p
+        className="status prominent"
+        role="status"
+        aria-live="polite"
+      >
         {status}
       </p>
     </section>

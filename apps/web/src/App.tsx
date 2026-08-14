@@ -39,6 +39,7 @@ import {
   isSupportedChainId,
   type SupportedChainId
 } from "./lib/networks";
+import { parseStampRoute } from "./lib/routes";
 
 type PersonalSignProvider = {
   request(arguments_: {
@@ -104,13 +105,6 @@ type AuthFeedback = {
 
 function shortAddress(address: string): string {
   return address.slice(0, 6) + "…" + address.slice(-4);
-}
-
-function currentStampId(): Hex | undefined {
-  const match = /^\/stamps\/(0x[0-9a-fA-F]{64})\/?$/u.exec(
-    window.location.pathname
-  );
-  return match?.[1]?.toLowerCase() as Hex | undefined;
 }
 
 function currentHandoffStampId(): Hex | undefined {
@@ -268,9 +262,7 @@ export function App() {
       }
     }
 
-    if (
-      walletChainId === selectedChainId
-    ) {
+    if (walletChainId === selectedChainId) {
       lastAutoSwitch.current = undefined;
       return;
     }
@@ -326,206 +318,207 @@ export function App() {
     showAuthStatus(t("auth.signedIn"), "success");
   }, [showAuthStatus, t]);
 
- const signIn = useCallback(
-  async (requestedConnector: Connector): Promise<void> => {
-    const connector = connectors.find(
-      (candidate) => candidate.uid === requestedConnector.uid
-    );
+  const signIn = useCallback(
+    async (requestedConnector: Connector): Promise<void> => {
+      const connector = connectors.find(
+        (candidate) => candidate.uid === requestedConnector.uid
+      );
 
-    if (connector === undefined) {
-      showAuthStatus(t("auth.providerUnavailable"), "error");
-      return;
-    }
+      if (connector === undefined) {
+        showAuthStatus(t("auth.providerUnavailable"), "error");
+        return;
+      }
 
-    const reuseConnection =
-      address !== undefined && activeConnector?.uid === connector.uid;
+      const reuseConnection =
+        address !== undefined && activeConnector?.uid === connector.uid;
 
-    setAuthBusy(true);
-    showAuthStatus(
-      reuseConnection
-        ? t("auth.preparing", { network: selectedNetwork.name })
-        : t("auth.connecting", { network: selectedNetwork.name }),
-      "pending"
-    );
+      setAuthBusy(true);
+      showAuthStatus(
+        reuseConnection
+          ? t("auth.preparing", { network: selectedNetwork.name })
+          : t("auth.connecting", { network: selectedNetwork.name }),
+        "pending"
+      );
 
-    try {
-      let account: Address | undefined;
-      let connectedChainId: number | undefined;
-      let nonce: NonceResponse | undefined;
-      let signedMessage: SignedSiweMessage | undefined;
+      try {
+        let account: Address | undefined;
+        let connectedChainId: number | undefined;
+        let nonce: NonceResponse | undefined;
+        let signedMessage: SignedSiweMessage | undefined;
 
-      if (connector.id === "baseAccount") {
-        // Keep Wagmi connected for the rest of the app.
-        if (!reuseConnection) {
-          await connectAsync({
+        if (connector.id === "baseAccount") {
+          // Keep Wagmi connected for the rest of the app.
+          if (!reuseConnection) {
+            await connectAsync({
+              connector,
+              chainId: selectedChainId
+            });
+          }
+
+          // Base Account authentication must always happen on the
+          // currently selected Base network.
+          await ensureSelectedNetwork(connector);
+
+          // Always request a fresh nonce for Base Account SIWE.
+          nonce = await requestAuthNonce();
+          const signInWithEthereum = createBaseSiweCapability(nonce);
+
+          const provider = (await connector.getProvider()) as
+            | BaseSiweProvider
+            | null
+            | undefined;
+
+          if (provider == null) {
+            throw new Error(t("auth.providerUnavailable"));
+          }
+
+          // Base Account authentication:
+          // wallet_connect + signInWithEthereum every time.
+          const result = await provider.request({
+            method: "wallet_connect",
+            params: [
+              {
+                version: "1",
+                capabilities: {
+                  signInWithEthereum
+                }
+              }
+            ]
+          });
+
+          const returnedAccount = result.accounts[0];
+          const siwe =
+            returnedAccount?.capabilities?.signInWithEthereum;
+
+          if (
+            returnedAccount === undefined ||
+            !isAddress(returnedAccount.address) ||
+            siwe === undefined ||
+            typeof siwe.message !== "string" ||
+            typeof siwe.signature !== "string" ||
+            !isHex(siwe.signature)
+          ) {
+            throw new Error(t("auth.invalidSignature"));
+          }
+
+          // Address, message and signature must all come from
+          // the same wallet_connect response.
+          account = returnedAccount.address;
+          connectedChainId = await readConnectorChainId(connector);
+
+          if (connectedChainId !== selectedChainId) {
+            throw new Error(
+              t("auth.switchIncomplete", {
+                chainId: connectedChainId,
+                network: selectedNetwork.name
+              })
+            );
+          }
+
+          signedMessage = {
+            message: siwe.message,
+            signature: siwe.signature
+          };
+        } else if (reuseConnection) {
+          // Existing non-Base wallet connection.
+          account = address;
+          connectedChainId =
+            walletChainId ?? (await readConnectorChainId(connector));
+        } else {
+          // New non-Base wallet connection.
+          const connection = await connectAsync({
             connector,
             chainId: selectedChainId
           });
+
+          account = connection.accounts[0];
+          connectedChainId = connection.chainId;
         }
 
-        // Base Account authentication must always happen on the
-        // currently selected Base network.
-        await ensureSelectedNetwork(connector);
-
-        // Always request a fresh nonce for Base Account SIWE.
-        nonce = await requestAuthNonce();
-        const signInWithEthereum = createBaseSiweCapability(nonce);
-
-        const provider = (await connector.getProvider()) as
-          | BaseSiweProvider
-          | null
-          | undefined;
-
-        if (provider == null) {
-          throw new Error(t("auth.providerUnavailable"));
-        }
-
-        // Base Account authentication:
-        // wallet_connect + signInWithEthereum every time.
-        const result = await provider.request({
-          method: "wallet_connect",
-          params: [
-            {
-              version: "1",
-              capabilities: {
-                signInWithEthereum
-              }
-            }
-          ]
-        });
-
-        const returnedAccount = result.accounts[0];
-        const siwe =
-          returnedAccount?.capabilities?.signInWithEthereum;
-
-        if (
-          returnedAccount === undefined ||
-          !isAddress(returnedAccount.address) ||
-          siwe === undefined ||
-          typeof siwe.message !== "string" ||
-          typeof siwe.signature !== "string" ||
-          !isHex(siwe.signature)
-        ) {
-          throw new Error(t("auth.invalidSignature"));
-        }
-
-        // Address, message and signature must all come from
-        // the same wallet_connect response.
-        account = returnedAccount.address;
-        connectedChainId = await readConnectorChainId(connector);
-
+        // Non-Base wallets may still need to switch networks here.
         if (connectedChainId !== selectedChainId) {
-          throw new Error(
-            t("auth.switchIncomplete", {
-              chainId: connectedChainId,
-              network: selectedNetwork.name
-            })
-          );
+          lastAutoSwitch.current =
+            `${account}:${String(connectedChainId)}:${String(selectedChainId)}`;
+
+          await ensureSelectedNetwork(connector);
         }
 
-        signedMessage = {
-          message: siwe.message,
-          signature: siwe.signature
-        };
-      } else if (reuseConnection) {
-        // Existing non-Base wallet connection.
-        account = address;
-        connectedChainId =
-          walletChainId ?? (await readConnectorChainId(connector));
-      } else {
-        // New non-Base wallet connection.
-        const connection = await connectAsync({
-          connector,
-          chainId: selectedChainId
-        });
+        // Base Account must never silently fall back to personal_sign.
+        if (signedMessage === undefined) {
+          if (connector.id === "baseAccount") {
+            throw new Error(
+              "Base Account did not return a SIWE signature."
+            );
+          }
 
-        account = connection.accounts[0];
-        connectedChainId = connection.chainId;
+          // Standard browser-wallet SIWE flow.
+          nonce ??= await requestAuthNonce();
+
+          const message = createSiweMessage({
+            address: account,
+            chainId: nonce.chainId,
+            domain: nonce.domain,
+            uri: nonce.uri,
+            version: "1",
+            nonce: nonce.nonce,
+            issuedAt: new Date(nonce.issuedAt),
+            expirationTime: new Date(nonce.expirationTime),
+            statement: SIWE_STATEMENT
+          });
+
+          showAuthStatus(t("auth.confirmMessage"), "pending");
+
+          const provider = (await connector.getProvider()) as
+            | PersonalSignProvider
+            | null
+            | undefined;
+
+          if (provider == null) {
+            throw new Error(t("auth.providerUnavailable"));
+          }
+
+          const signature = await provider.request({
+            method: "personal_sign",
+            params: [stringToHex(message), account]
+          });
+
+          if (typeof signature !== "string" || !isHex(signature)) {
+            throw new Error(t("auth.invalidSignature"));
+          }
+
+          signedMessage = {
+            message,
+            signature
+          };
+        }
+
+        await verifySignedSiwe(signedMessage);
+      } catch (error) {
+        showAuthStatus(
+          error instanceof Error
+            ? error.message
+            : t("auth.signInFailed"),
+          "error"
+        );
+      } finally {
+        setAuthBusy(false);
       }
-      // Non-Base wallets may still need to switch networks here.
-      if (connectedChainId !== selectedChainId) {
-        lastAutoSwitch.current =
-          `${account}:${String(connectedChainId)}:${String(selectedChainId)}`;
-
-        await ensureSelectedNetwork(connector);
-      }
-
-      // Base Account must never silently fall back to personal_sign.
-      if (signedMessage === undefined) {
-        if (connector.id === "baseAccount") {
-          throw new Error(
-            "Base Account did not return a SIWE signature."
-          );
-        }
-
-        // Standard browser-wallet SIWE flow.
-        nonce ??= await requestAuthNonce();
-
-        const message = createSiweMessage({
-          address: account,
-          chainId: nonce.chainId,
-          domain: nonce.domain,
-          uri: nonce.uri,
-          version: "1",
-          nonce: nonce.nonce,
-          issuedAt: new Date(nonce.issuedAt),
-          expirationTime: new Date(nonce.expirationTime),
-          statement: SIWE_STATEMENT
-        });
-
-        showAuthStatus(t("auth.confirmMessage"), "pending");
-
-        const provider = (await connector.getProvider()) as
-          | PersonalSignProvider
-          | null
-          | undefined;
-
-        if (provider == null) {
-          throw new Error(t("auth.providerUnavailable"));
-        }
-
-        const signature = await provider.request({
-          method: "personal_sign",
-          params: [stringToHex(message), account]
-        });
-
-        if (typeof signature !== "string" || !isHex(signature)) {
-          throw new Error(t("auth.invalidSignature"));
-        }
-
-        signedMessage = {
-          message,
-          signature
-        };
-      }
-
-      await verifySignedSiwe(signedMessage);
-    } catch (error) {
-      showAuthStatus(
-        error instanceof Error
-          ? error.message
-          : t("auth.signInFailed"),
-        "error"
-      );
-    } finally {
-      setAuthBusy(false);
-    }
-  },
-  [
-    activeConnector,
-    address,
-    connectAsync,
-    connectors,
-    ensureSelectedNetwork,
-    requestAuthNonce,
-    selectedChainId,
-    selectedNetwork.name,
-    showAuthStatus,
-    t,
-    verifySignedSiwe,
-    walletChainId
-  ]
-);
+    },
+    [
+      activeConnector,
+      address,
+      connectAsync,
+      connectors,
+      ensureSelectedNetwork,
+      requestAuthNonce,
+      selectedChainId,
+      selectedNetwork.name,
+      showAuthStatus,
+      t,
+      verifySignedSiwe,
+      walletChainId
+    ]
+  );
 
   async function disconnectWallet(): Promise<void> {
     setAuthBusy(true);
@@ -565,10 +558,12 @@ export function App() {
     ) {
       return;
     }
+
     const alreadyAuthenticated =
       session.authenticated &&
       session.walletAddress.toLowerCase() === address.toLowerCase() &&
       session.chainId === selectedChainId;
+
     if (alreadyAuthenticated) {
       lastAutoAuthentication.current = undefined;
       return;
@@ -614,9 +609,9 @@ export function App() {
     walletChainMatchesSelection;
   const displayedAuthStatus =
     authFeedback.message === "" ? t("auth.ready") : authFeedback.message;
-  const stampId = currentStampId();
-  const handoffStampId = currentHandoffStampId();
   const path = window.location.pathname;
+  const stampRoute = parseStampRoute(path);
+  const handoffStampId = currentHandoffStampId();
   const publicInformationPage = getPublicInformationPage(path);
 
   let page: React.ReactNode;
@@ -692,8 +687,13 @@ export function App() {
         }
       />
     );
-  } else if (stampId !== undefined) {
-    page = <StampPage stampId={stampId} />;
+  } else if (stampRoute !== undefined) {
+    page = (
+      <StampPage
+        chainId={stampRoute.chainId}
+        stampId={stampRoute.stampId}
+      />
+    );
   } else {
     page = (
       <section className="shell workspace">
@@ -821,14 +821,20 @@ export function App() {
           )}
         </div>
       </header>
+
       <div className="shell context-bar">
         <div
           className={"auth-status " + authFeedback.tone}
           role={authFeedback.tone === "error" ? "alert" : "status"}
-          aria-live={authFeedback.tone === "error" ? "assertive" : "polite"}
+          aria-live={
+            authFeedback.tone === "error"
+              ? "assertive"
+              : "polite"
+          }
         >
           <span>{displayedAuthStatus}</span>
         </div>
+
         <div className="context-controls">
           <label className="setting-picker network-picker">
             <span className="setting-icon" aria-hidden="true">
@@ -865,6 +871,7 @@ export function App() {
               </span>
             </span>
           </label>
+
           <label className="setting-picker language-picker">
             <span className="setting-icon" aria-hidden="true">
               <svg viewBox="0 0 20 20">
@@ -893,7 +900,9 @@ export function App() {
           </label>
         </div>
       </div>
+
       <main>{page}</main>
+
       <footer className="shell footer">
         <div className="footer-copy">
           <span>{t("footer.product")}</span>
