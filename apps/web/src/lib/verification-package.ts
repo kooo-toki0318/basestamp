@@ -12,7 +12,7 @@ import {
   CONTENT_DOMAIN,
   MAX_FILE_SIZE_BYTES
 } from "./crypto";
-import { BASE_SEPOLIA_DEPLOYMENT, type Deployment } from "./deployment";
+import { getDeployment, type Deployment } from "./deployment";
 import {
   hashMetadata,
   validateMetadata,
@@ -26,8 +26,8 @@ export type VerificationPackage = {
   schemaVersion: 1;
   type: "BaseStampVerificationPackage";
   app: "BaseStamp";
-  network: "base-sepolia";
-  chainId: 84532;
+  network: Deployment["network"];
+  chainId: Deployment["chainId"];
   contractAddress: Address;
   stampId: Hex;
   transactionHash: Hex;
@@ -302,7 +302,7 @@ export function serializeVerificationPackage(
 
 export async function parseVerificationPackage(
   source: string,
-  deployment: Deployment = BASE_SEPOLIA_DEPLOYMENT
+  expectedDeployment?: Deployment
 ): Promise<VerificationPackage> {
   if (new TextEncoder().encode(source).byteLength > MAX_PACKAGE_BYTES) {
     throw new Error("Verification package exceeds the 64 KiB limit.");
@@ -346,6 +346,13 @@ export async function parseVerificationPackage(
     throw new Error("Unsupported package type.");
   }
   if (record.app !== "BaseStamp") throw new Error("Unsupported package app.");
+  const packageChainId = requireInteger(record.chainId, "Chain ID", 1);
+  let deployment: Deployment;
+  try {
+    deployment = expectedDeployment ?? getDeployment(packageChainId);
+  } catch {
+    throw new Error("Package chain does not match an approved deployment.");
+  }
   if (record.network !== deployment.network) {
     throw new Error("Package network does not match the approved deployment.");
   }
@@ -438,8 +445,8 @@ export async function parseVerificationPackage(
     schemaVersion: 1,
     type: "BaseStampVerificationPackage",
     app: "BaseStamp",
-    network: "base-sepolia",
-    chainId: 84532,
+    network: deployment.network,
+    chainId: deployment.chainId,
     contractAddress,
     stampId,
     transactionHash,

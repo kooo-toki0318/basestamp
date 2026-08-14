@@ -12,7 +12,7 @@
     "source=basestamp-foundry-keystore,target=/home/node/.foundry/keystores,type=volume",
     "source=basestamp-codex-home,target=/home/node/.codex,type=volume"
   ],
-  "forwardPorts": [5173, 8787, 8545, 9545],
+  "forwardPorts": [5173, 8787, 8545, 9545,8976],
   "portsAttributes": {
     "5173": {
       "label": "Vite"

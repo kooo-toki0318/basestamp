@@ -7,8 +7,13 @@ import {
   type PublicClient,
   type Transport
 } from "viem";
-import { baseSepolia } from "viem/chains";
-import { BASE_SEPOLIA_DEPLOYMENT } from "./deployment";
+import { base, baseSepolia } from "viem/chains";
+import {
+  BASE_MAINNET_DEPLOYMENT,
+  BASE_SEPOLIA_DEPLOYMENT,
+  getDeployment,
+  type Deployment
+} from "./deployment";
 import { registryAbi, type RegistryStamp } from "./registry";
 import {
   formatUnixSeconds,
@@ -23,9 +28,36 @@ export const baseSepoliaPublicClient: PublicClient<
   transport: http(BASE_SEPOLIA_DEPLOYMENT.rpcUrl)
 });
 
-export async function readRegistryStamp(stampId: Hex): Promise<RegistryStamp> {
-  return baseSepoliaPublicClient.readContract({
-    address: BASE_SEPOLIA_DEPLOYMENT.registryAddress,
+export const baseMainnetPublicClient: PublicClient<
+  Transport,
+  typeof base
+> = createPublicClient({
+  chain: base,
+  transport: http(BASE_MAINNET_DEPLOYMENT.rpcUrl)
+});
+
+type DeploymentPublicClient =
+  | typeof baseMainnetPublicClient
+  | typeof baseSepoliaPublicClient;
+
+export function getDeploymentPublicClient(
+  chainId: number
+): DeploymentPublicClient {
+  if (chainId === BASE_MAINNET_DEPLOYMENT.chainId) {
+    return baseMainnetPublicClient;
+  }
+  if (chainId === BASE_SEPOLIA_DEPLOYMENT.chainId) {
+    return baseSepoliaPublicClient;
+  }
+  throw new Error("Unsupported BaseStamp deployment chain.");
+}
+
+export async function readRegistryStamp(
+  stampId: Hex,
+  deployment: Deployment = BASE_SEPOLIA_DEPLOYMENT
+): Promise<RegistryStamp> {
+  return getDeploymentPublicClient(deployment.chainId).readContract({
+    address: deployment.registryAddress,
     abi: registryAbi,
     functionName: "getStamp",
     args: [stampId]
@@ -34,10 +66,11 @@ export async function readRegistryStamp(stampId: Hex): Promise<RegistryStamp> {
 
 export async function readRegistryStampAtBlock(
   stampId: Hex,
-  blockNumber: bigint
+  blockNumber: bigint,
+  deployment: Deployment = BASE_SEPOLIA_DEPLOYMENT
 ): Promise<RegistryStamp> {
-  return baseSepoliaPublicClient.readContract({
-    address: BASE_SEPOLIA_DEPLOYMENT.registryAddress,
+  return getDeploymentPublicClient(deployment.chainId).readContract({
+    address: deployment.registryAddress,
     abi: registryAbi,
     functionName: "getStamp",
     args: [stampId],
@@ -48,12 +81,14 @@ export async function readRegistryStampAtBlock(
 export async function verifyPackageOnchain(
   package_: VerificationPackage
 ): Promise<RegistryStamp> {
+  const deployment = getDeployment(package_.chainId);
+  const publicClient = getDeploymentPublicClient(deployment.chainId);
   const [stamp, receipt, transaction] = await Promise.all([
-    readRegistryStamp(package_.stampId),
-    baseSepoliaPublicClient.getTransactionReceipt({
+    readRegistryStamp(package_.stampId, deployment),
+    publicClient.getTransactionReceipt({
       hash: package_.transactionHash
     }),
-    baseSepoliaPublicClient.getTransaction({
+    publicClient.getTransaction({
       hash: package_.transactionHash
     })
   ]);
@@ -65,7 +100,7 @@ export async function verifyPackageOnchain(
     transaction.to === null ||
     !isAddressEqual(
       transaction.to,
-      BASE_SEPOLIA_DEPLOYMENT.registryAddress
+      deployment.registryAddress
     ) ||
     transaction.value !== 0n
   ) {
@@ -75,7 +110,7 @@ export async function verifyPackageOnchain(
     throw new Error("Transaction receipt does not match the package block.");
   }
 
-  const block = await baseSepoliaPublicClient.getBlock({
+  const block = await publicClient.getBlock({
     blockNumber: receipt.blockNumber
   });
   if (block.hash !== package_.blockHash) {

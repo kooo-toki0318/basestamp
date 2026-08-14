@@ -263,25 +263,62 @@ function requirePaymasterPreflight(request: Request): void {
   }
 }
 
-async function defaultVerifySiweSignature(arguments_: VerifyArguments): Promise<boolean> {
+function requireMainnetRpcUrl(env: Bindings): string {
+  const rpcUrl = env.MAINNET_RPC_URL?.trim() ?? "";
+
+  let parsed: URL;
+  try {
+    parsed = new URL(rpcUrl);
+  } catch {
+    throw new ApiError(
+      503,
+      "auth_not_configured",
+      "Authentication is not configured."
+    );
+  }
+
+  if (
+    parsed.protocol !== "https:" ||
+    parsed.username !== "" ||
+    parsed.password !== ""
+  ) {
+    throw new ApiError(
+      503,
+      "auth_not_configured",
+      "Authentication is not configured."
+    );
+  }
+
+  return rpcUrl;
+}
+
+async function defaultVerifySiweSignature(
+  env: Bindings,
+  arguments_: VerifyArguments
+): Promise<boolean> {
   const chain =
     arguments_.chainId === base.id
       ? base
       : arguments_.chainId === baseSepolia.id
         ? baseSepolia
         : undefined;
+
   if (chain === undefined) return false;
-  const client = createPublicClient({ chain, transport: http() });
+
+  const rpcUrl =
+    arguments_.chainId === base.id
+      ? requireMainnetRpcUrl(env)
+      : BASE_SEPOLIA_DEPLOYMENT.rpcUrl;
+
+  const client = createPublicClient({
+    chain,
+    transport: http(rpcUrl)
+  });
+
   return client.verifyMessage({
     address: arguments_.address,
     message: arguments_.message,
-    signature: arguments_.signature,
-    ...(arguments_.chainId === base.id
-      ? {
-          erc6492VerifierAddress:
-            "0x7dd271fa79df3a5feb99f73bebfa4395b2e4f4be" as const
-        }
-      : {})
+    signature: arguments_.signature
   });
 }
 
@@ -399,8 +436,6 @@ function authenticationRejected(
 }
 
 export function createCoreApp(dependencies: Dependencies = {}) {
-  const verifySiweSignature =
-    dependencies.verifySiweSignature ?? defaultVerifySiweSignature;
   const readHandoffStamp =
     dependencies.readHandoffStamp ?? defaultReadHandoffStamp;
   const verifyHandoffSignature =
@@ -593,7 +628,7 @@ export function createCoreApp(dependencies: Dependencies = {}) {
       throw authenticationRejected("nonce", chainId);
     }
 
-    const valid = await verifySiweSignature({
+    const verifyArguments: VerifyArguments = {
       address: fields.address,
       chainId,
       message: body.message,
@@ -601,7 +636,15 @@ export function createCoreApp(dependencies: Dependencies = {}) {
       domain: config.domain,
       nonce: fields.nonce,
       now: nowDate
-    });
+    };
+
+    const valid =
+      dependencies.verifySiweSignature !== undefined
+        ? await dependencies.verifySiweSignature(verifyArguments)
+        : await defaultVerifySiweSignature(
+            context.env,
+            verifyArguments
+          );
     if (!valid) {
       throw authenticationRejected("signature", chainId);
     }

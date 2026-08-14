@@ -3,7 +3,7 @@ export const BASE_NETWORKS = [
     chainId: 8453,
     name: "Base",
     environment: "Mainnet",
-    registryAvailable: false
+    registryAvailable: true
   },
   {
     chainId: 84532,
