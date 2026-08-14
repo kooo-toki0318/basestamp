@@ -1,4 +1,4 @@
-import { concatHex, encodeFunctionData, type Address, type Hex } from "viem";
+import { encodeFunctionData, type Address, type Hex } from "viem";
 import { getDeployment } from "./lib/deployment";
 import type { SupportedChainId } from "./lib/networks";
 import { registryAbi } from "./lib/registry";
@@ -20,36 +20,41 @@ export function createSponsoredStampCall(
 ) {
   const deployment = getDeployment(arguments_.chainId);
 
+  const paymasterUrl = new URL("/api/sponsor", arguments_.origin);
+  paymasterUrl.searchParams.set("claimId", arguments_.grant.claimId);
+  paymasterUrl.searchParams.set("grantToken", arguments_.grant.grantToken);
+
   return {
     account: arguments_.account,
     chainId: deployment.chainId,
     calls: [
       {
         to: deployment.registryAddress,
-        data: concatHex([
-          encodeFunctionData({
-            abi: registryAbi,
-            functionName: "createStamp",
-            args: [
-              arguments_.contentCommitment,
-              arguments_.metadataHash,
-              arguments_.stampNonce
-            ]
-          }),
-          arguments_.builderDataSuffix
-        ])
+        data: encodeFunctionData({
+          abi: registryAbi,
+          functionName: "createStamp",
+          args: [
+            arguments_.contentCommitment,
+            arguments_.metadataHash,
+            arguments_.stampNonce
+          ]
+        })
       }
     ] as const,
     capabilities: {
+      dataSuffix: {
+        value: arguments_.builderDataSuffix,
+        optional: false as const
+      },
       paymasterService: {
         context: {
           claimId: arguments_.grant.claimId,
           grantToken: arguments_.grant.grantToken
         },
         optional: false as const,
-        url: new URL("/api/sponsor", arguments_.origin).href
+        url: paymasterUrl.href
       }
     },
-    forceAtomic: true as const
+        forceAtomic: true as const
   };
 }

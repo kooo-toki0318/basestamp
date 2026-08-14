@@ -59,6 +59,7 @@ import {
   proxyPaymasterRequest,
   type ProxyPaymasterResponse
 } from "./paymaster";
+import { validateAcceptedPaymentTokensRequest } from "./paymaster-policy";
 import { readCleanupHealth } from "./cleanup";
 import { createSecurityTxt } from "./security-txt";
 
@@ -852,19 +853,77 @@ export function createCoreApp(dependencies: Dependencies = {}) {
     return context.body(null, 204);
   });
 
-  app.post("/api/sponsor", async (context) => {
-    const request = await readJsonObject(context.req.raw);
-    const response = await proxySponsorPaymaster(
-      context.env,
-      request,
-      context.req.header("CF-Connecting-IP")
-    );
+app.post("/api/sponsor", async (context) => {
+  const request = await readJsonObject(context.req.raw);
+
+  if (request.method === "pm_getAcceptedPaymentTokens") {
+    const acceptedPaymentTokensRequest =
+      validateAcceptedPaymentTokensRequest(request);
+
     return context.json({
       jsonrpc: "2.0",
-      id: response.id,
-      result: response.result
+      id: acceptedPaymentTokensRequest.id,
+      result: {
+        acceptedTokens: []
+      }
     });
+  }
+
+  let paymasterRequest: Record<string, unknown> = request;
+
+  if (
+    request.method === "pm_getPaymasterStubData" ||
+    request.method === "pm_getPaymasterData"
+  ) {
+    const params: unknown[] | undefined = Array.isArray(request.params)
+      ? request.params
+      : undefined;
+
+    if (params?.length === 4) {
+      const suppliedContext = params[3];
+
+      const hasGrantContext =
+        typeof suppliedContext === "object" &&
+        suppliedContext !== null &&
+        !Array.isArray(suppliedContext) &&
+        typeof Reflect.get(suppliedContext, "claimId") === "string" &&
+        typeof Reflect.get(suppliedContext, "grantToken") === "string";
+
+      if (!hasGrantContext) {
+        const requestUrl = new URL(context.req.url);
+        const claimId = requestUrl.searchParams.get("claimId");
+        const grantToken = requestUrl.searchParams.get("grantToken");
+
+        if (claimId !== null && grantToken !== null) {
+          paymasterRequest = {
+            ...request,
+            params: [
+              params[0],
+              params[1],
+              params[2],
+              {
+                claimId,
+                grantToken
+              }
+            ]
+          };
+        }
+      }
+    }
+  }
+
+  const response = await proxySponsorPaymaster(
+    context.env,
+    paymasterRequest,
+    context.req.header("CF-Connecting-IP")
+  );
+
+  return context.json({
+    jsonrpc: "2.0",
+    id: response.id,
+    result: response.result
   });
+});
 
   app.post("/api/handoff/challenge", async (context) => {
     const config = getAuthConfig(context.env);
@@ -1109,18 +1168,38 @@ export function createCoreApp(dependencies: Dependencies = {}) {
   app.notFound((context) =>
     context.json({ error: { code: "not_found", message: "Endpoint not found." } }, 404)
   );
+
+
   app.onError((error, context) => {
     if (error instanceof ApiError) {
+      const route = diagnosticRoute(context.req.path);
+
+      if (route === "sponsor_proxy") {
+        console.warn(
+          JSON.stringify({
+            event: "api_error",
+            method: context.req.method,
+            route,
+            status: error.status,
+            code: error.code
+          })
+        );
+      }
+
       return context.json(
         { error: { code: error.code, message: error.message } },
         error.status
       );
     }
-    console.error(JSON.stringify({
-      event: "worker_unexpected_error",
-      method: context.req.method,
-      route: diagnosticRoute(context.req.path)
-    }));
+
+    console.error(
+      JSON.stringify({
+        event: "worker_unexpected_error",
+        method: context.req.method,
+        route: diagnosticRoute(context.req.path)
+      })
+    );
+
     return context.json(
       { error: { code: "internal_error", message: "Request failed." } },
       500

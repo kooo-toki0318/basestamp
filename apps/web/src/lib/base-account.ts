@@ -1,11 +1,26 @@
 import { getAddress } from "viem";
 
-export const BASE_ACCOUNT_FACTORY = getAddress(
-  "0xba5ed110efdba3d005bfc882d75358acbbb85842"
+export const BASE_ACCOUNT_FACTORY_V1 = getAddress(
+  "0x0BA5ED0c6AA8c49038F819E587E2633c4A9F428a"
 );
-export const BASE_ACCOUNT_IMPLEMENTATION = getAddress(
+
+export const BASE_ACCOUNT_IMPLEMENTATION_V1 = getAddress(
+  "0x000100abaad02f1cfC8Bbe32bD5a564817339E72"
+);
+
+export const BASE_ACCOUNT_FACTORY_V1_1 = getAddress(
+  "0xBA5ED110eFDBa3D005bfC882d75358ACBbB85842"
+);
+
+export const BASE_ACCOUNT_IMPLEMENTATION_V1_1 = getAddress(
   "0x00000110dCdEdC9581cb5eCB8467282f2926534d"
 );
+
+// Existing code/tests may still import these names.
+// Keep v1.1 as the default alias.
+export const BASE_ACCOUNT_FACTORY = BASE_ACCOUNT_FACTORY_V1_1;
+export const BASE_ACCOUNT_IMPLEMENTATION =
+  BASE_ACCOUNT_IMPLEMENTATION_V1_1;
 export const BASE_ACCOUNT_ERC6492_VALIDATOR = getAddress(
   "0xcfCE48B757601F3f351CB6f434CB0517aEEE293D"
 );

@@ -38,31 +38,42 @@ describe("sponsored stamp call", () => {
       expect(request.calls).toHaveLength(1);
       expect(request.calls[0].to).toBe(deployment.registryAddress);
       expect(
-        request.calls[0].data.endsWith(BUILDER_SUFFIX.slice(2))
-      ).toBe(true);
+        request.capabilities.dataSuffix
+      ).toEqual({
+        value: BUILDER_SUFFIX,
+        optional: false
+      });
       expect(Attribution.fromData(request.calls[0].data)).toEqual({
         codes: [BUILDER_CODE],
         id: 0
       });
 
-      const registryData = `0x${request.calls[0].data.slice(
-        2,
-        2 - BUILDER_SUFFIX.length
-      )}` as const;
+expect(
+  decodeFunctionData({
+    abi: registryAbi,
+    data: request.calls[0].data
+  })
+).toEqual({
+  args: [CONTENT, METADATA, NONCE],
+  functionName: "createStamp"
+});
       expect(
         decodeFunctionData({ abi: registryAbi, data: registryData })
       ).toEqual({
         args: [CONTENT, METADATA, NONCE],
         functionName: "createStamp"
       });
-      expect(request.capabilities.paymasterService).toEqual({
-        context: {
-          claimId: "11111111-1111-4111-8111-111111111111",
-          grantToken: "a".repeat(43)
-        },
-        optional: false,
-        url: "https://basestamp.example/api/sponsor"
-      });
+  expect(request.capabilities.paymasterService).toEqual({
+  context: {
+    claimId: "11111111-1111-4111-8111-111111111111",
+    grantToken: "a".repeat(43)
+  },
+  optional: false,
+  url:
+    "https://basestamp.example/api/sponsor" +
+    "?claimId=11111111-1111-4111-8111-111111111111" +
+    `&grantToken=${"a".repeat(43)}`
+});
     }
   );
 });

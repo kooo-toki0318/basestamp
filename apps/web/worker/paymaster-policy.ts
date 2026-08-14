@@ -11,7 +11,8 @@ import {
 } from "viem";
 import {
   BASE_ACCOUNT_ENTRY_POINT,
-  BASE_ACCOUNT_FACTORY,
+  BASE_ACCOUNT_FACTORY_V1,
+  BASE_ACCOUNT_FACTORY_V1_1,
   baseAccountAbi,
   baseAccountFactoryAbi
 } from "../src/lib/base-account";
@@ -44,6 +45,7 @@ type PaymasterMethod =
   | "pm_getPaymasterStubData";
 
 export type ParsedCounterfactualAccount = {
+  factory: Address;
   factoryData: Hex;
   nonce: bigint;
   owners: readonly Hex[];
@@ -174,10 +176,12 @@ function requireBuilderSuffix(data: Hex, builderCode: string): Hex {
   return `0x${data.slice(2, 2 - expectedSuffix.length)}`;
 }
 
-function decodeRegistryCall(data: Hex, builderCode: string) {
-  const unsuffixedData = requireBuilderSuffix(data, builderCode);
+function decodeRegistryCall(data: Hex) {
   try {
-    const decoded = decodeFunctionData({ abi: registryAbi, data: unsuffixedData });
+    const decoded = decodeFunctionData({
+      abi: registryAbi,
+      data
+    });;
     if (decoded.functionName !== "createStamp") rejectPaymasterRequest();
     const [contentCommitment, metadataHash, stampNonce] = decoded.args;
     const canonical = encodeFunctionData({
@@ -185,7 +189,9 @@ function decodeRegistryCall(data: Hex, builderCode: string) {
       functionName: "createStamp",
       args: [contentCommitment, metadataHash, stampNonce]
     });
-    if (canonical !== unsuffixedData) rejectPaymasterRequest();
+    if (canonical !== data) {
+      rejectPaymasterRequest();
+    }
     if (
       contentCommitment === ZERO_BYTES32 ||
       metadataHash === ZERO_BYTES32 ||
@@ -206,58 +212,150 @@ function decodeAccountCall(
   registryAddress: Address
 ) {
   try {
-    const decoded = decodeFunctionData({ abi: baseAccountAbi, data });
-    if (decoded.functionName !== "execute") rejectPaymasterRequest();
-    const [target, value, registryData] = decoded.args;
-    if (
-      !isAddressEqual(target, registryAddress) ||
-      value !== 0n
-    ) {
-      rejectPaymasterRequest();
+  const unsuffixedData = requireBuilderSuffix(
+    data,
+    builderCode
+  );
+
+  const decoded = decodeFunctionData({
+    abi: baseAccountAbi,
+    data: unsuffixedData
+  });
+
+    if (decoded.functionName === "execute") {
+      const [target, value, registryData] = decoded.args;
+
+      if (
+        !isAddressEqual(target, registryAddress) ||
+        value !== 0n
+      ) {
+        rejectPaymasterRequest();
+      }
+
+      const canonical = encodeFunctionData({
+        abi: baseAccountAbi,
+        functionName: "execute",
+        args: [target, value, registryData]
+      });
+
+        if (canonical !== unsuffixedData) {
+        rejectPaymasterRequest();
+      }
+
+      return decodeRegistryCall(registryData);
     }
-    const canonical = encodeFunctionData({
-      abi: baseAccountAbi,
-      functionName: "execute",
-      args: [target, value, registryData]
-    });
-    if (canonical !== data) rejectPaymasterRequest();
-    return decodeRegistryCall(registryData, builderCode);
+
+    if (decoded.functionName === "executeBatch") {
+      const [calls] = decoded.args;
+
+      // BaseStamp sponsorship only allows exactly one Registry call.
+      if (calls.length !== 1) {
+        rejectPaymasterRequest();
+      }
+
+      const call = calls[0];
+
+      if (
+        !isAddressEqual(call.target, registryAddress) ||
+        call.value !== 0n
+      ) {
+        rejectPaymasterRequest();
+      }
+
+      const canonical = encodeFunctionData({
+        abi: baseAccountAbi,
+        functionName: "executeBatch",
+        args: [calls]
+      });
+
+      if (canonical !== unsuffixedData) {
+        rejectPaymasterRequest();
+      }
+
+      return decodeRegistryCall(call.data);
+    }
+
+    return rejectPaymasterRequest();
   } catch (error) {
     if (error instanceof ApiError) throw error;
     return rejectPaymasterRequest();
   }
 }
 
-function decodeInitCode(value: unknown): ParsedCounterfactualAccount | null {
-  if (value === undefined || value === "0x") return null;
-  const initCode = requireHexData(value, MAX_INIT_CODE_BYTES);
-  if (initCode.length <= 42) rejectPaymasterRequest();
+function decodeInitCode(
+  value: unknown
+): ParsedCounterfactualAccount | null {
+  if (value === undefined || value === "0x") {
+    return null;
+  }
 
-  const factoryValue = `0x${initCode.slice(2, 42)}`;
-  if (!isAddress(factoryValue) || !isAddressEqual(factoryValue, BASE_ACCOUNT_FACTORY)) {
+  const initCode = requireHexData(value, MAX_INIT_CODE_BYTES);
+
+  if (initCode.length <= 42) {
     rejectPaymasterRequest();
   }
+
+  const factoryValue = `0x${initCode.slice(2, 42)}`;
+
+  if (!isAddress(factoryValue)) {
+    rejectPaymasterRequest();
+  }
+
+  const factory = getAddress(factoryValue);
+
+  const supportedFactory =
+    isAddressEqual(factory, BASE_ACCOUNT_FACTORY_V1) ||
+    isAddressEqual(factory, BASE_ACCOUNT_FACTORY_V1_1);
+
+  if (!supportedFactory) {
+    rejectPaymasterRequest();
+  }
+
   const factoryData: Hex = `0x${initCode.slice(42)}`;
+
   try {
-    const decoded = decodeFunctionData({ abi: baseAccountFactoryAbi, data: factoryData });
-    if (decoded.functionName !== "createAccount") rejectPaymasterRequest();
+    const decoded = decodeFunctionData({
+      abi: baseAccountFactoryAbi,
+      data: factoryData
+    });
+
+    if (decoded.functionName !== "createAccount") {
+      rejectPaymasterRequest();
+    }
+
     const [owners, nonce] = decoded.args;
+
     if (
       owners.length < 1 ||
       owners.length > 8 ||
-      owners.some((owner) => requireHexData(owner, 2_048) !== owner)
+      owners.some(
+        (owner) => requireHexData(owner, 2_048) !== owner
+      )
     ) {
       rejectPaymasterRequest();
     }
+
     const canonical = encodeFunctionData({
       abi: baseAccountFactoryAbi,
       functionName: "createAccount",
       args: [owners, nonce]
     });
-    if (canonical !== factoryData) rejectPaymasterRequest();
-    return { factoryData, nonce, owners };
+
+    if (canonical !== factoryData) {
+      rejectPaymasterRequest();
+    }
+
+    return {
+      factory,
+      factoryData,
+      nonce,
+      owners
+    };
   } catch (error) {
-    if (error instanceof ApiError) throw error;
+    if (error instanceof ApiError) {
+      throw error;
+    }
+
     return rejectPaymasterRequest();
   }
 }
@@ -325,6 +423,57 @@ function requireUserOperation(
     call: decodeAccountCall(callData, builderCode, registryAddress),
     counterfactualAccount: decodeInitCode(value.initCode),
     sender
+  };
+}
+
+export type ValidatedAcceptedPaymentTokensRequest = {
+  chainId: SupportedChainId;
+  id: JsonRpcId;
+};
+
+export function validateAcceptedPaymentTokensRequest(
+  value: unknown
+): ValidatedAcceptedPaymentTokensRequest {
+  if (
+    !isRecord(value) ||
+    !hasExactKeys(value, ["jsonrpc", "id", "method", "params"])
+  ) {
+    rejectPaymasterRequest();
+  }
+
+  if (value.jsonrpc !== "2.0") {
+    rejectPaymasterRequest();
+  }
+
+  const id = requireJsonRpcId(value.id);
+
+  if (value.method !== "pm_getAcceptedPaymentTokens") {
+    rejectPaymasterRequest();
+  }
+
+  if (!isUnknownArray(value.params) || value.params.length !== 3) {
+    rejectPaymasterRequest();
+  }
+
+  const [entryPoint, rawChainId, context] = value.params;
+
+  if (
+    typeof entryPoint !== "string" ||
+    !isAddress(entryPoint) ||
+    !isAddressEqual(entryPoint, BASE_ACCOUNT_ENTRY_POINT)
+  ) {
+    rejectPaymasterRequest();
+  }
+
+  const chainId = requireSupportedChainId(rawChainId);
+
+  if (!isRecord(context)) {
+    rejectPaymasterRequest();
+  }
+
+  return {
+    chainId,
+    id
   };
 }
 

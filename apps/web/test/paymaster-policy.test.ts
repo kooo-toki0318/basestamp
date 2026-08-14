@@ -155,21 +155,58 @@ describe("Paymaster deep validation", () => {
     expectRejected(request);
   });
 
-  it("rejects batch execution", () => {
-    const request = createRequest();
-    const userOperation = request.params[0] as Record<string, unknown>;
-    userOperation.callData = encodeFunctionData({
-      abi: baseAccountAbi,
-      functionName: "executeBatch",
-      args: [[{
-        target: BASE_SEPOLIA_DEPLOYMENT.registryAddress,
-        value: 0n,
-        data: createRegistryCall()
-      }]]
-    });
-    expectRejected(request);
+it("accepts exactly one batch Registry execution", () => {
+  const request = createRequest();
+  const userOperation = request.params[0] as Record<string, unknown>;
+
+  userOperation.callData = encodeFunctionData({
+    abi: baseAccountAbi,
+    functionName: "executeBatch",
+    args: [
+      [
+        {
+          target: BASE_SEPOLIA_DEPLOYMENT.registryAddress,
+          value: 0n,
+          data: createRegistryCall()
+        }
+      ]
+    ]
   });
 
+  const parsed = validatePaymasterRequest(request, BUILDER_CODE);
+
+  expect(parsed.call).toEqual({
+    contentCommitment: BYTES_32_A,
+    metadataHash: BYTES_32_B,
+    stampNonce: BYTES_32_C
+  });
+});
+
+it("rejects batch execution with multiple calls", () => {
+  const request = createRequest();
+  const userOperation = request.params[0] as Record<string, unknown>;
+
+  userOperation.callData = encodeFunctionData({
+    abi: baseAccountAbi,
+    functionName: "executeBatch",
+    args: [
+      [
+        {
+          target: BASE_SEPOLIA_DEPLOYMENT.registryAddress,
+          value: 0n,
+          data: createRegistryCall()
+        },
+        {
+          target: BASE_SEPOLIA_DEPLOYMENT.registryAddress,
+          value: 0n,
+          data: createRegistryCall()
+        }
+      ]
+    ]
+  });
+
+  expectRejected(request);
+});
   it.each([
     ["wrong target", createAccountCall({ target: OTHER_TARGET })],
     ["nonzero value", createAccountCall({ value: 1n })],

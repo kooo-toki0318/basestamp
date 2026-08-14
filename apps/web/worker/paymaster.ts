@@ -1,8 +1,8 @@
 import {
   createPublicClient,
   isAddressEqual,
-  keccak256,
   http,
+  type Address,
   type Chain,
   type Hex,
   type PublicClient,
@@ -11,10 +11,10 @@ import {
 import { base, baseSepolia } from "viem/chains";
 import {
   BASE_ACCOUNT_ENTRY_POINT,
-  BASE_ACCOUNT_FACTORY,
-  BASE_ACCOUNT_FACTORY_CODE_HASH,
-  BASE_ACCOUNT_IMPLEMENTATION,
-  BASE_ACCOUNT_IMPLEMENTATION_CODE_HASH,
+  BASE_ACCOUNT_FACTORY_V1,
+  BASE_ACCOUNT_FACTORY_V1_1,
+  BASE_ACCOUNT_IMPLEMENTATION_V1,
+  BASE_ACCOUNT_IMPLEMENTATION_V1_1,
   baseAccountAbi,
   baseAccountFactoryAbi
 } from "../src/lib/base-account";
@@ -484,6 +484,39 @@ function rejectUnsupportedAccount(): never {
   );
 }
 
+function getSupportedAccountVersion(factory: Address) {
+  if (isAddressEqual(factory, BASE_ACCOUNT_FACTORY_V1)) {
+    return {
+      factory: BASE_ACCOUNT_FACTORY_V1,
+      implementation: BASE_ACCOUNT_IMPLEMENTATION_V1
+    };
+  }
+
+  if (isAddressEqual(factory, BASE_ACCOUNT_FACTORY_V1_1)) {
+    return {
+      factory: BASE_ACCOUNT_FACTORY_V1_1,
+      implementation: BASE_ACCOUNT_IMPLEMENTATION_V1_1
+    };
+  }
+
+  return rejectUnsupportedAccount();
+}
+
+function isSupportedImplementation(
+  implementation: Address
+): boolean {
+  return (
+    isAddressEqual(
+      implementation,
+      BASE_ACCOUNT_IMPLEMENTATION_V1
+    ) ||
+    isAddressEqual(
+      implementation,
+      BASE_ACCOUNT_IMPLEMENTATION_V1_1
+    )
+  );
+}
+
 async function verifyBaseAccountWithClient<
   transport extends Transport,
   chain extends Chain | undefined
@@ -493,74 +526,133 @@ async function verifyBaseAccountWithClient<
 ): Promise<void> {
   try {
     const block = await client.getBlock();
-    const [factoryCode, implementationCode, senderCode] = await Promise.all([
-      client.getCode({ address: BASE_ACCOUNT_FACTORY, blockNumber: block.number }),
-      client.getCode({
-        address: BASE_ACCOUNT_IMPLEMENTATION,
-        blockNumber: block.number
-      }),
-      client.getCode({ address: request.sender, blockNumber: block.number })
-    ]);
+
+    const senderCode = await client.getCode({
+      address: request.sender,
+      blockNumber: block.number
+    });
+
+    if (request.counterfactualAccount !== null) {
+      if (senderCode !== undefined && senderCode !== "0x") {
+        rejectUnsupportedAccount();
+      }
+
+      const accountVersion = getSupportedAccountVersion(
+        request.counterfactualAccount.factory
+      );
+
+      const [factoryCode, implementationCode] =
+        await Promise.all([
+          client.getCode({
+            address: accountVersion.factory,
+            blockNumber: block.number
+          }),
+          client.getCode({
+            address: accountVersion.implementation,
+            blockNumber: block.number
+          })
+        ]);
+
+      if (
+        factoryCode === undefined ||
+        factoryCode === "0x" ||
+        implementationCode === undefined ||
+        implementationCode === "0x"
+      ) {
+        rejectUnsupportedAccount();
+      }
+
+      const factoryImplementation =
+        await client.readContract({
+          address: accountVersion.factory,
+          abi: baseAccountFactoryAbi,
+          functionName: "implementation",
+          blockNumber: block.number
+        });
+
+      if (
+        !isAddressEqual(
+          factoryImplementation,
+          accountVersion.implementation
+        )
+      ) {
+        rejectUnsupportedAccount();
+      }
+
+      const predictedAddress =
+        await client.readContract({
+          address: accountVersion.factory,
+          abi: baseAccountFactoryAbi,
+          functionName: "getAddress",
+          args: [
+            request.counterfactualAccount.owners,
+            request.counterfactualAccount.nonce
+          ],
+          blockNumber: block.number
+        });
+
+      if (
+        !isAddressEqual(
+          predictedAddress,
+          request.sender
+        )
+      ) {
+        rejectUnsupportedAccount();
+      }
+
+      return;
+    }
+
     if (
-      factoryCode === undefined ||
-      implementationCode === undefined ||
-      keccak256(factoryCode) !== BASE_ACCOUNT_FACTORY_CODE_HASH ||
-      keccak256(implementationCode) !== BASE_ACCOUNT_IMPLEMENTATION_CODE_HASH
+      senderCode === undefined ||
+      senderCode === "0x"
     ) {
       rejectUnsupportedAccount();
     }
 
-    const factoryImplementation = await client.readContract({
-      address: BASE_ACCOUNT_FACTORY,
-      abi: baseAccountFactoryAbi,
-      functionName: "implementation",
-      blockNumber: block.number
-    });
-    if (!isAddressEqual(factoryImplementation, BASE_ACCOUNT_IMPLEMENTATION)) {
+    const [entryPoint, implementation] =
+      await Promise.all([
+        client.readContract({
+          address: request.sender,
+          abi: baseAccountAbi,
+          functionName: "entryPoint",
+          blockNumber: block.number
+        }),
+        client.readContract({
+          address: request.sender,
+          abi: baseAccountAbi,
+          functionName: "implementation",
+          blockNumber: block.number
+        })
+      ]);
+
+    if (
+      !isAddressEqual(
+        entryPoint,
+        BASE_ACCOUNT_ENTRY_POINT
+      ) ||
+      !isSupportedImplementation(implementation)
+    ) {
       rejectUnsupportedAccount();
     }
 
-    if (request.counterfactualAccount !== null) {
-      if (senderCode !== undefined && senderCode !== "0x") rejectUnsupportedAccount();
-      const predictedAddress = await client.readContract({
-        address: BASE_ACCOUNT_FACTORY,
-        abi: baseAccountFactoryAbi,
-        functionName: "getAddress",
-        args: [
-          request.counterfactualAccount.owners,
-          request.counterfactualAccount.nonce
-        ],
+    const implementationCode =
+      await client.getCode({
+        address: implementation,
         blockNumber: block.number
       });
-      if (!isAddressEqual(predictedAddress, request.sender)) {
-        rejectUnsupportedAccount();
-      }
-      return;
-    }
 
-    if (senderCode === undefined || senderCode === "0x") rejectUnsupportedAccount();
-    const [entryPoint, implementation] = await Promise.all([
-      client.readContract({
-        address: request.sender,
-        abi: baseAccountAbi,
-        functionName: "entryPoint",
-        blockNumber: block.number
-      }),
-      client.readContract({
-        address: request.sender,
-        abi: baseAccountAbi,
-        functionName: "implementation",
-        blockNumber: block.number
-      })
-    ]);
     if (
-      !isAddressEqual(entryPoint, BASE_ACCOUNT_ENTRY_POINT) ||
-      !isAddressEqual(implementation, BASE_ACCOUNT_IMPLEMENTATION)
+      implementationCode === undefined ||
+      implementationCode === "0x"
     ) {
       rejectUnsupportedAccount();
     }
   } catch (error) {
-    if (error instanceof ApiError) throw error;
+    if (error instanceof ApiError) {
+      throw error;
+    }
+
     rejectUnsupportedAccount();
   }
 }
