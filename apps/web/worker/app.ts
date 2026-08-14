@@ -7,14 +7,21 @@ import {
   http,
   isAddress,
   type Address,
-  type Hex
+  type Chain,
+  type Hex,
+  type PublicClient,
+  type Transport
 } from "viem";
 import { base, baseSepolia } from "viem/chains";
 import { generateSiweNonce, parseSiweMessage } from "viem/siwe";
 import { validateSiweFields } from "./auth-policy";
 import { detectLocaleFromAcceptLanguage } from "../src/locale-negotiation";
 import { hmacSha256Hex, randomHex32, randomToken, sha256Hex } from "./crypto";
-import { BASE_SEPOLIA_DEPLOYMENT } from "../src/lib/deployment";
+import {
+  BASE_SEPOLIA_DEPLOYMENT,
+  getDeployment
+} from "../src/lib/deployment";
+import type { SupportedChainId } from "../src/lib/networks";
 import { registryAbi } from "../src/lib/registry";
 import { formatUnixSeconds } from "../src/lib/verification-package";
 import {
@@ -117,7 +124,10 @@ type SponsorPaymasterProxy = (
 type Dependencies = {
   issueSponsorGrant?: SponsorGrantIssuer;
   proxyPaymaster?: SponsorPaymasterProxy;
-  readHandoffStamp?: (stampId: Hex) => Promise<HandoffStamp>;
+  readHandoffStamp?: (
+    stampId: Hex,
+    chainId?: SupportedChainId
+  ) => Promise<HandoffStamp>;
   readSession?: SessionReader;
   verifyHandoffSignature?: (
     arguments_: VerifyHandoffArguments
@@ -322,30 +332,62 @@ async function defaultVerifySiweSignature(
   });
 }
 
-function createHandoffPublicClient() {
-  return createPublicClient({
-    chain: baseSepolia,
-    transport: http(BASE_SEPOLIA_DEPLOYMENT.rpcUrl)
-  });
-}
-
-async function defaultReadHandoffStamp(stampId: Hex): Promise<HandoffStamp> {
-  const client = createHandoffPublicClient();
+async function readHandoffStampWithClient<
+  transport extends Transport,
+  chain extends Chain | undefined
+>(
+  client: PublicClient<transport, chain>,
+  registryAddress: Address,
+  stampId: Hex
+): Promise<HandoffStamp> {
   return client.readContract({
-    address: BASE_SEPOLIA_DEPLOYMENT.registryAddress,
+    address: registryAddress,
     abi: registryAbi,
     functionName: "getStamp",
     args: [stampId]
   });
 }
 
-async function defaultVerifyHandoffSignature(
+async function defaultReadHandoffStamp(
+  env: Bindings,
+  stampId: Hex,
+  chainId: SupportedChainId
+): Promise<HandoffStamp> {
+  const deployment = getDeployment(chainId);
+  if (chainId === base.id) {
+    const client = createPublicClient({
+      chain: base,
+      transport: http(requireMainnetRpcUrl(env))
+    });
+    return readHandoffStampWithClient(
+      client,
+      deployment.registryAddress,
+      stampId
+    );
+  }
+
+  const client = createPublicClient({
+    chain: baseSepolia,
+    transport: http(BASE_SEPOLIA_DEPLOYMENT.rpcUrl)
+  });
+  return readHandoffStampWithClient(
+    client,
+    deployment.registryAddress,
+    stampId
+  );
+}
+
+async function verifyHandoffSignatureWithClient<
+  transport extends Transport,
+  chain extends Chain | undefined
+>(
+  client: PublicClient<transport, chain>,
+  registryAddress: Address,
   arguments_: VerifyHandoffArguments
 ): Promise<VerifyHandoffResult> {
-  const client = createHandoffPublicClient();
   const block = await client.getBlock();
   const stamp = await client.readContract({
-    address: BASE_SEPOLIA_DEPLOYMENT.registryAddress,
+    address: registryAddress,
     abi: registryAbi,
     functionName: "getStamp",
     args: [arguments_.challenge.message.stampId],
@@ -370,6 +412,35 @@ async function defaultVerifyHandoffSignature(
       blockTimestamp: formatUnixSeconds(block.timestamp)
     }
   };
+}
+
+async function defaultVerifyHandoffSignature(
+  env: Bindings,
+  arguments_: VerifyHandoffArguments
+): Promise<VerifyHandoffResult> {
+  const chainId = arguments_.challenge.domain.chainId;
+  const deployment = getDeployment(chainId);
+  if (chainId === base.id) {
+    const client = createPublicClient({
+      chain: base,
+      transport: http(requireMainnetRpcUrl(env))
+    });
+    return verifyHandoffSignatureWithClient(
+      client,
+      deployment.registryAddress,
+      arguments_
+    );
+  }
+
+  const client = createPublicClient({
+    chain: baseSepolia,
+    transport: http(BASE_SEPOLIA_DEPLOYMENT.rpcUrl)
+  });
+  return verifyHandoffSignatureWithClient(
+    client,
+    deployment.registryAddress,
+    arguments_
+  );
 }
 
 async function readSession(
@@ -436,10 +507,21 @@ function authenticationRejected(
 }
 
 export function createCoreApp(dependencies: Dependencies = {}) {
-  const readHandoffStamp =
-    dependencies.readHandoffStamp ?? defaultReadHandoffStamp;
-  const verifyHandoffSignature =
-    dependencies.verifyHandoffSignature ?? defaultVerifyHandoffSignature;
+  const readHandoffStampForRequest = (
+    env: Bindings,
+    stampId: Hex,
+    chainId: SupportedChainId
+  ): Promise<HandoffStamp> =>
+    dependencies.readHandoffStamp === undefined
+      ? defaultReadHandoffStamp(env, stampId, chainId)
+      : dependencies.readHandoffStamp(stampId, chainId);
+  const verifyHandoffSignatureForRequest = (
+    env: Bindings,
+    arguments_: VerifyHandoffArguments
+  ): Promise<VerifyHandoffResult> =>
+    dependencies.verifyHandoffSignature === undefined
+      ? defaultVerifyHandoffSignature(env, arguments_)
+      : dependencies.verifyHandoffSignature(arguments_);
   const readSessionForRequest = dependencies.readSession ?? readSession;
   const verifyTurnstile =
     dependencies.verifyTurnstile ?? verifyTurnstileToken;
@@ -787,7 +869,25 @@ export function createCoreApp(dependencies: Dependencies = {}) {
     const config = getAuthConfig(context.env);
     requireOrigin(context.req.raw, config);
     const body = await readJsonObject(context.req.raw);
-    assertExactKeys(body, ["stampId"]);
+    const hasExplicitChainId = Object.prototype.hasOwnProperty.call(
+      body,
+      "chainId"
+    );
+    assertExactKeys(
+      body,
+      hasExplicitChainId ? ["chainId", "stampId"] : ["stampId"]
+    );
+    const requestedChainId = hasExplicitChainId
+      ? body.chainId
+      : BASE_SEPOLIA_DEPLOYMENT.chainId;
+    if (!isAllowedChainId(requestedChainId, config)) {
+      throw new ApiError(
+        400,
+        "unsupported_chain",
+        "Unsupported Handoff chain."
+      );
+    }
+    const chainId = requestedChainId;
     const stampId = requireBytes32(body.stampId, "Stamp ID");
 
     const session = await readSessionForRequest(
@@ -796,13 +896,25 @@ export function createCoreApp(dependencies: Dependencies = {}) {
       getCookie(context, SESSION_COOKIE)
     );
     if (session === null) {
-      throw new ApiError(403, "authentication_required", "Authentication is required.");
+      throw new ApiError(
+        403,
+        "authentication_required",
+        "Authentication is required."
+      );
     }
-    if (session.chain_id !== BASE_SEPOLIA_DEPLOYMENT.chainId) {
-      throw new ApiError(400, "unsupported_chain", "Base Sepolia authentication is required.");
+    if (session.chain_id !== chainId) {
+      throw new ApiError(
+        400,
+        "unsupported_chain",
+        "Authentication must match the Handoff chain."
+      );
     }
 
-    const stamp = await readHandoffStamp(stampId);
+    const stamp = await readHandoffStampForRequest(
+      context.env,
+      stampId,
+      chainId
+    );
     const ackNonce = randomHex32();
     const ackNonceHash = await sha256Hex(ackNonce);
     const issuedAt = Math.floor(Date.now() / 1000);
@@ -818,14 +930,14 @@ export function createCoreApp(dependencies: Dependencies = {}) {
         stampId,
         1,
         session.wallet_address,
-        session.chain_id,
+        chainId,
         challengeExpiresAt,
         issuedAt
       )
       .run();
 
     const challenge: HandoffChallenge = {
-      domain: createHandoffDomain(),
+      domain: createHandoffDomain(chainId),
       types: HANDOFF_TYPES,
       primaryType: HANDOFF_PRIMARY_TYPE,
       message: {
@@ -855,7 +967,11 @@ export function createCoreApp(dependencies: Dependencies = {}) {
       getCookie(context, SESSION_COOKIE)
     );
     if (session === null) {
-      throw new ApiError(403, "authentication_required", "Authentication is required.");
+      throw new ApiError(
+        403,
+        "authentication_required",
+        "Authentication is required."
+      );
     }
 
     const ackNonceHash = await sha256Hex(ackNonce);
@@ -867,24 +983,40 @@ export function createCoreApp(dependencies: Dependencies = {}) {
     )
       .bind(ackNonceHash)
       .first<HandoffChallengeRow>();
+    if (row === null) {
+      throw new ApiError(
+        400,
+        "handoff_challenge_invalid",
+        "Handoff challenge is invalid or expired."
+      );
+    }
     if (
-      row?.statement_version !== 1 ||
+      row.statement_version !== 1 ||
       row.wallet_address !== session.wallet_address ||
       row.chain_id !== session.chain_id ||
-      row.chain_id !== BASE_SEPOLIA_DEPLOYMENT.chainId ||
+      !isAllowedChainId(row.chain_id, config) ||
       row.used_at !== null ||
       row.expires_at <= now ||
       row.created_at > now + 300 ||
       row.expires_at <= row.created_at ||
       row.expires_at - row.created_at > HANDOFF_CHALLENGE_TTL_SECONDS
     ) {
-      throw new ApiError(400, "handoff_challenge_invalid", "Handoff challenge is invalid or expired.");
+      throw new ApiError(
+        400,
+        "handoff_challenge_invalid",
+        "Handoff challenge is invalid or expired."
+      );
     }
 
+    const chainId = row.chain_id;
     const stampId = requireBytes32(row.stamp_id, "Stored stamp ID");
-    const stamp = await readHandoffStamp(stampId);
+    const stamp = await readHandoffStampForRequest(
+      context.env,
+      stampId,
+      chainId
+    );
     const challenge: HandoffChallenge = {
-      domain: createHandoffDomain(),
+      domain: createHandoffDomain(chainId),
       types: HANDOFF_TYPES,
       primaryType: HANDOFF_PRIMARY_TYPE,
       message: {
@@ -900,11 +1032,14 @@ export function createCoreApp(dependencies: Dependencies = {}) {
 
     let result: VerifyHandoffResult;
     try {
-      result = await verifyHandoffSignature({
-        signer: getAddress(session.wallet_address),
-        challenge,
-        signature
-      });
+      result = await verifyHandoffSignatureForRequest(
+        context.env,
+        {
+          signer: getAddress(session.wallet_address),
+          challenge,
+          signature
+        }
+      );
     } catch (error) {
       if (error instanceof UnsupportedCounterfactualSignatureError) {
         throw new ApiError(400, "counterfactual_not_allowed", error.message);
@@ -912,7 +1047,11 @@ export function createCoreApp(dependencies: Dependencies = {}) {
       throw error;
     }
     if (!result.valid) {
-      throw new ApiError(400, "handoff_signature_invalid", "Handoff signature is invalid.");
+      throw new ApiError(
+        400,
+        "handoff_signature_invalid",
+        "Handoff signature is invalid."
+      );
     }
 
     const consumed = await context.env.DB.prepare(
@@ -923,7 +1062,11 @@ export function createCoreApp(dependencies: Dependencies = {}) {
       .bind(now, ackNonceHash, session.wallet_address, now)
       .run();
     if (consumed.meta.changes !== 1) {
-      throw new ApiError(400, "handoff_challenge_invalid", "Handoff challenge is invalid or expired.");
+      throw new ApiError(
+        400,
+        "handoff_challenge_invalid",
+        "Handoff challenge is invalid or expired."
+      );
     }
 
     return context.json({

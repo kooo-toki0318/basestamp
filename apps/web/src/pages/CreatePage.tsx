@@ -322,20 +322,19 @@ export function CreatePage({
     busy
   );
 
-  const handoffAvailable =
-    package_?.chainId === BASE_SEPOLIA_DEPLOYMENT.chainId;
   const handoffUrl =
-    package_ === undefined || !handoffAvailable
+    package_ === undefined
       ? ""
       : createHandoffUrl(
           window.location.origin,
           package_.stampId,
-          package_.commitment.contentSalt
+          package_.commitment.contentSalt,
+          package_.chainId
         );
   const shareMessage =
-    handoffAvailable
-      ? t("create.shareMessage", { url: handoffUrl })
-      : "";
+    package_ === undefined
+      ? ""
+      : t("create.shareMessage", { url: handoffUrl });
   const webShareAvailable =
     typeof Reflect.get(navigator, "share") === "function";
 
@@ -1203,10 +1202,7 @@ export function CreatePage({
               >
                 {t("create.downloadPackage")}
               </button>
-              <div
-                className="share-panel"
-                hidden={!handoffAvailable}
-              >
+              <div className="share-panel">
                 <h3>{t("create.shareTitle")}</h3>
                 <p className="share-warning">{t("create.shareWarning")}</p>
                 <span className="share-label">

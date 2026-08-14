@@ -39,7 +39,7 @@ import {
   isSupportedChainId,
   type SupportedChainId
 } from "./lib/networks";
-import { parseStampRoute } from "./lib/routes";
+import { parseHandoffRoute, parseStampRoute } from "./lib/routes";
 
 type PersonalSignProvider = {
   request(arguments_: {
@@ -105,13 +105,6 @@ type AuthFeedback = {
 
 function shortAddress(address: string): string {
   return address.slice(0, 6) + "…" + address.slice(-4);
-}
-
-function currentHandoffStampId(): Hex | undefined {
-  const match = /^\/handoff\/(0x[0-9a-fA-F]{64})\/?$/u.exec(
-    window.location.pathname
-  );
-  return match?.[1]?.toLowerCase() as Hex | undefined;
 }
 
 export function App() {
@@ -611,7 +604,7 @@ export function App() {
     authFeedback.message === "" ? t("auth.ready") : authFeedback.message;
   const path = window.location.pathname;
   const stampRoute = parseStampRoute(path);
-  const handoffStampId = currentHandoffStampId();
+  const handoffRoute = parseHandoffRoute(path);
   const publicInformationPage = getPublicInformationPage(path);
 
   let page: React.ReactNode;
@@ -645,10 +638,11 @@ export function App() {
     page = <VerifyStartPage />;
   } else if (publicInformationPage !== undefined) {
     page = <InformationPage page={publicInformationPage} />;
-  } else if (handoffStampId !== undefined) {
+  } else if (handoffRoute !== undefined) {
     page = (
       <HandoffPage
-        stampId={handoffStampId}
+        chainId={handoffRoute.chainId}
+        stampId={handoffRoute.stampId}
         address={address}
         walletChainId={walletChainId}
         selectedChainId={selectedChainId}
@@ -665,8 +659,8 @@ export function App() {
         onAuthenticate={() => {
           if (activeConnector !== undefined) void signIn(activeConnector);
         }}
-        onSelectBaseSepolia={() => {
-          selectNetwork(84532);
+        onSelectNetwork={() => {
+          selectNetwork(handoffRoute.chainId);
         }}
         onEnsureNetwork={() => ensureSelectedNetwork()}
         onSignTypedData={(challenge) =>

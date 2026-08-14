@@ -18,7 +18,7 @@ import {
   constantTimeEqual,
   MAX_FILE_SIZE_BYTES
 } from "../lib/crypto";
-import { BASE_SEPOLIA_DEPLOYMENT } from "../lib/deployment";
+import { getDeployment } from "../lib/deployment";
 import {
   HANDOFF_PRIMARY_TYPE,
   HANDOFF_RECEIPT_TYPES,
@@ -32,12 +32,17 @@ import {
   type HandoffReceipt
 } from "../lib/handoff";
 import { verifyHandoffReceipt } from "../lib/handoff-receipt";
+import {
+  getBaseNetwork,
+  type SupportedChainId
+} from "../lib/networks";
 import { readRegistryStamp } from "../lib/onchain";
+import { createHandoffPath } from "../lib/routes";
 import { formatUnixSeconds } from "../lib/verification-package";
 import type { RegistryStamp } from "../lib/registry";
-import type { SupportedChainId } from "../lib/networks";
 
 type HandoffPageProperties = {
+  chainId: SupportedChainId;
   stampId: Hex;
   address: Address | undefined;
   walletChainId: number | undefined;
@@ -49,7 +54,7 @@ type HandoffPageProperties = {
   onSignInBase: () => void;
   onSignInBrowser: () => void;
   onAuthenticate: () => void;
-  onSelectBaseSepolia: () => void;
+  onSelectNetwork: () => void;
   onEnsureNetwork: () => Promise<void>;
   onSignTypedData: (challenge: HandoffChallenge) => Promise<Hex>;
 };
@@ -72,6 +77,7 @@ function downloadReceipt(receipt: HandoffReceipt): void {
 }
 
 export function HandoffPage({
+  chainId,
   stampId,
   address,
   walletChainId,
@@ -83,11 +89,13 @@ export function HandoffPage({
   onSignInBase,
   onSignInBrowser,
   onAuthenticate,
-  onSelectBaseSepolia,
+  onSelectNetwork,
   onEnsureNetwork,
   onSignTypedData
 }: HandoffPageProperties) {
   const { t } = useI18n();
+  const deployment = getDeployment(chainId);
+  const routeNetwork = getBaseNetwork(chainId);
   const fragment = useMemo(
     () => readCapturedHandoffFragment(stampId),
     [stampId]
@@ -105,20 +113,21 @@ export function HandoffPage({
       ? createHandoffUrl(
           window.location.origin,
           stampId,
-          bytes32ToBase64Url(fragment.contentSalt)
+          bytes32ToBase64Url(fragment.contentSalt),
+          chainId
         )
       : undefined;
   const authenticatedForReceipt =
     session.authenticated &&
     address !== undefined &&
     isAddressEqual(getAddress(session.walletAddress), address) &&
-    session.chainId === BASE_SEPOLIA_DEPLOYMENT.chainId &&
-    walletChainId === BASE_SEPOLIA_DEPLOYMENT.chainId &&
-    selectedChainId === BASE_SEPOLIA_DEPLOYMENT.chainId;
+    session.chainId === chainId &&
+    walletChainId === chainId &&
+    selectedChainId === chainId;
 
   useEffect(() => {
     let active = true;
-    void readRegistryStamp(stampId)
+    void readRegistryStamp(stampId, deployment)
       .then((nextStamp) => {
         if (!active) return;
         setStamp(nextStamp);
@@ -138,7 +147,7 @@ export function HandoffPage({
     return () => {
       active = false;
     };
-  }, [fragment.status, stampId, t]);
+  }, [deployment, fragment.status, stampId, t]);
 
   function chooseFile(nextFile: File | undefined): void {
     setMatch(undefined);
@@ -220,13 +229,15 @@ export function HandoffPage({
       setStatus(t("handoffPage.status.challenge"));
       const challengeValue = await postJson<unknown>(
         "/api/handoff/challenge",
-        { stampId },
+        { chainId, stampId },
         t
       );
       const challenge = parseHandoffChallenge(
         challengeValue,
         stampId,
-        stamp.contentCommitment
+        stamp.contentCommitment,
+        Math.floor(Date.now() / 1000),
+        chainId
       );
 
       setStatus(t("handoffPage.status.signing"));
@@ -241,7 +252,10 @@ export function HandoffPage({
         },
         t
       );
-      const verification = parseHandoffVerification(verificationValue);
+      const verification = parseHandoffVerification(
+        verificationValue,
+        chainId
+      );
       const nextReceipt: HandoffReceipt = {
         schemaVersion: 1,
         type: "BaseStampHandoffReceipt",
@@ -256,7 +270,7 @@ export function HandoffPage({
         verifiedAt: verification.verifiedAt,
         verification: verification.verification,
         verificationUrl:
-          window.location.origin + "/handoff/" + challenge.message.stampId
+          window.location.origin + createHandoffPath(chainId, stampId)
       };
       setReceipt(nextReceipt);
       downloadReceipt(nextReceipt);
@@ -285,7 +299,10 @@ export function HandoffPage({
         await receiptFile.text(),
         window.location.origin
       );
-      if (parsed.message.stampId !== stampId) {
+      if (
+        parsed.domain.chainId !== chainId ||
+        parsed.message.stampId !== stampId
+      ) {
         throw new Error(t("handoffPage.status.receiptStampMismatch"));
       }
       setStatus(t("handoffPage.status.recheckingReceipt"));
@@ -387,8 +404,8 @@ export function HandoffPage({
             </div>
             <div>
               <dt>{t("stamp.registry")}</dt>
-              <dd title={BASE_SEPOLIA_DEPLOYMENT.registryAddress}>
-                {shortHex(BASE_SEPOLIA_DEPLOYMENT.registryAddress)}
+              <dd title={deployment.registryAddress}>
+                {shortHex(deployment.registryAddress)}
               </dd>
             </div>
             {stamp !== undefined && (
@@ -488,7 +505,15 @@ export function HandoffPage({
           <h2>{t("handoffPage.receiptTitle")}</h2>
           <p>{t("handoffPage.receiptIntro")}</p>
 
-          {address === undefined ? (
+          {selectedChainId !== chainId ? (
+            <button
+              type="button"
+              onClick={onSelectNetwork}
+              disabled={authBusy}
+            >
+              {t("auth.switchTo", { network: routeNetwork.name })}
+            </button>
+          ) : address === undefined ? (
             <div className="handoff-auth-actions">
               <button
                 type="button"
@@ -508,21 +533,13 @@ export function HandoffPage({
                 </button>
               )}
             </div>
-          ) : selectedChainId !== BASE_SEPOLIA_DEPLOYMENT.chainId ? (
-            <button
-              type="button"
-              onClick={onSelectBaseSepolia}
-              disabled={authBusy}
-            >
-              {t("handoffPage.selectSepolia")}
-            </button>
-          ) : walletChainId !== BASE_SEPOLIA_DEPLOYMENT.chainId ? (
+          ) : walletChainId !== chainId ? (
             <button
               type="button"
               onClick={() => void onEnsureNetwork()}
               disabled={authBusy}
             >
-              {t("auth.switchTo", { network: "Base Sepolia" })}
+              {t("auth.switchTo", { network: routeNetwork.name })}
             </button>
           ) : !authenticatedForReceipt ? (
             <button

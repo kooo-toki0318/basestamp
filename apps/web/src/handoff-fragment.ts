@@ -1,5 +1,6 @@
 import type { Hex } from "viem";
 import { parseHandoffFragment } from "./lib/handoff";
+import { parseHandoffRoute } from "./lib/routes";
 
 type CapturedHandoffFragment =
   | { status: "missing"; stampId: Hex }
@@ -9,12 +10,9 @@ type CapturedHandoffFragment =
 let capturedFragment: CapturedHandoffFragment | undefined;
 
 export function captureHandoffFragment(): void {
-  const match = /^\/handoff\/(0x[0-9a-fA-F]{64})\/?$/u.exec(
-    window.location.pathname
-  );
-  const rawStampId = match?.[1];
-  if (rawStampId === undefined) return;
-  const stampId = rawStampId.toLowerCase() as Hex;
+  const route = parseHandoffRoute(window.location.pathname);
+  if (route === undefined) return;
+  const stampId = route.stampId;
 
   try {
     capturedFragment = {

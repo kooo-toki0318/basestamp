@@ -6,7 +6,15 @@ import {
   type Hex
 } from "viem";
 import { BYTES32_HEX_PATTERN, base64UrlToBytes32 } from "./crypto";
-import { BASE_SEPOLIA_DEPLOYMENT } from "./deployment";
+import {
+  BASE_SEPOLIA_DEPLOYMENT,
+  getDeployment
+} from "./deployment";
+import {
+  isSupportedChainId,
+  type SupportedChainId
+} from "./networks";
+import { createHandoffPath } from "./routes";
 import { assertStrictJsonSyntax } from "./verification-package";
 
 export const HANDOFF_STATEMENT =
@@ -45,7 +53,7 @@ export const HANDOFF_RECEIPT_TYPES = {
 export type HandoffDomain = {
   name: "BaseStamp";
   version: "1";
-  chainId: 84532;
+  chainId: SupportedChainId;
   verifyingContract: Address;
 };
 
@@ -139,6 +147,16 @@ function requireInteger(
   return value;
 }
 
+function requireSupportedChainId(
+  value: unknown,
+  field: string
+): SupportedChainId {
+  if (typeof value !== "number" || !isSupportedChainId(value)) {
+    throw new Error(field + " must be a supported Base chain ID.");
+  }
+  return value;
+}
+
 function requireBytes32(value: unknown, field: string): Hex {
   const text = requireString(value, field);
   if (!BYTES32_HEX_PATTERN.test(text)) {
@@ -201,25 +219,33 @@ function requireSignature(value: unknown): Hex {
   return text.toLowerCase() as Hex;
 }
 
-export function createHandoffDomain(): HandoffDomain {
+export function createHandoffDomain(
+  chainId: SupportedChainId = BASE_SEPOLIA_DEPLOYMENT.chainId
+): HandoffDomain {
+  const deployment = getDeployment(chainId);
   return {
     name: "BaseStamp",
     version: "1",
-    chainId: BASE_SEPOLIA_DEPLOYMENT.chainId,
-    verifyingContract: BASE_SEPOLIA_DEPLOYMENT.registryAddress
+    chainId: deployment.chainId,
+    verifyingContract: deployment.registryAddress
   };
 }
 
 export function createHandoffUrl(
   origin: string,
   stampId: Hex,
-  contentSalt: string
+  contentSalt: string,
+  chainId?: SupportedChainId
 ): string {
   base64UrlToBytes32(contentSalt);
   if (!BYTES32_HEX_PATTERN.test(stampId)) {
     throw new Error("Stamp ID must be lowercase bytes32 hex.");
   }
-  const url = new URL("/handoff/" + stampId, origin);
+  const pathname =
+    chainId === undefined
+      ? "/handoff/" + stampId
+      : createHandoffPath(chainId, stampId);
+  const url = new URL(pathname, origin);
   url.hash = "k=" + contentSalt;
   return url.toString();
 }
@@ -236,7 +262,8 @@ export function parseHandoffChallenge(
   value: unknown,
   expectedStampId: Hex,
   expectedContentCommitment: Hex,
-  nowSeconds = Math.floor(Date.now() / 1000)
+  nowSeconds = Math.floor(Date.now() / 1000),
+  expectedChainId: SupportedChainId = BASE_SEPOLIA_DEPLOYMENT.chainId
 ): HandoffChallenge {
   const challenge = requireRecord(value, "Handoff challenge");
   requireExactKeys(
@@ -248,6 +275,7 @@ export function parseHandoffChallenge(
     throw new Error("Handoff challenge primary type is invalid.");
   }
 
+  const deployment = getDeployment(expectedChainId);
   const domain = requireRecord(challenge.domain, "Handoff challenge domain");
   requireExactKeys(
     domain,
@@ -261,8 +289,8 @@ export function parseHandoffChallenge(
   if (
     domain.name !== "BaseStamp" ||
     domain.version !== "1" ||
-    domain.chainId !== BASE_SEPOLIA_DEPLOYMENT.chainId ||
-    !isAddressEqual(verifyingContract, BASE_SEPOLIA_DEPLOYMENT.registryAddress)
+    domain.chainId !== deployment.chainId ||
+    !isAddressEqual(verifyingContract, deployment.registryAddress)
   ) {
     throw new Error("Handoff challenge domain is invalid.");
   }
@@ -317,7 +345,7 @@ export function parseHandoffChallenge(
   }
 
   return {
-    domain: createHandoffDomain(),
+    domain: createHandoffDomain(expectedChainId),
     types: HANDOFF_TYPES,
     primaryType: HANDOFF_PRIMARY_TYPE,
     message: {
@@ -332,7 +360,10 @@ export function parseHandoffChallenge(
   };
 }
 
-export function parseHandoffVerification(value: unknown): HandoffVerification {
+export function parseHandoffVerification(
+  value: unknown,
+  chainId: SupportedChainId = BASE_SEPOLIA_DEPLOYMENT.chainId
+): HandoffVerification {
   const result = requireRecord(value, "Handoff verification");
   requireExactKeys(
     result,
@@ -349,6 +380,7 @@ export function parseHandoffVerification(value: unknown): HandoffVerification {
   ) {
     throw new Error("Handoff signature validation method is invalid.");
   }
+  const deployment = getDeployment(chainId);
   const verifiedAt = requireTimestamp(result.verifiedAt, "Handoff verified-at");
   const verification = requireRecord(
     result.verification,
@@ -367,7 +399,7 @@ export function parseHandoffVerification(value: unknown): HandoffVerification {
       blockNumber: requireInteger(
         verification.blockNumber,
         "Handoff verification block number",
-        Number(BASE_SEPOLIA_DEPLOYMENT.deploymentBlock)
+        Number(deployment.deploymentBlock)
       ),
       blockHash: requireBytes32(
         verification.blockHash,
@@ -436,6 +468,8 @@ export function parseHandoffReceipt(
     ["name", "version", "chainId", "verifyingContract"],
     "Receipt domain"
   );
+  const chainId = requireSupportedChainId(domain.chainId, "Receipt chain ID");
+  const deployment = getDeployment(chainId);
   const verifyingContract = requireAddress(
     domain.verifyingContract,
     "Receipt verifying contract"
@@ -443,8 +477,7 @@ export function parseHandoffReceipt(
   if (
     domain.name !== "BaseStamp" ||
     domain.version !== "1" ||
-    domain.chainId !== BASE_SEPOLIA_DEPLOYMENT.chainId ||
-    !isAddressEqual(verifyingContract, BASE_SEPOLIA_DEPLOYMENT.registryAddress)
+    !isAddressEqual(verifyingContract, deployment.registryAddress)
   ) {
     throw new Error("Receipt domain does not match the approved deployment.");
   }
@@ -522,7 +555,7 @@ export function parseHandoffReceipt(
   const blockNumber = requireInteger(
     verification.blockNumber,
     "Receipt block number",
-    Number(BASE_SEPOLIA_DEPLOYMENT.deploymentBlock)
+    Number(deployment.deploymentBlock)
   );
   const blockHash = requireBytes32(
     verification.blockHash,
@@ -538,9 +571,15 @@ export function parseHandoffReceipt(
     "Receipt verification URL"
   );
   const parsedUrl = new URL(verificationUrl);
+  const chainAwarePath = createHandoffPath(chainId, stampId);
+  const legacySepoliaPath = "/handoff/" + stampId;
   if (
     parsedUrl.origin !== expectedOrigin ||
-    parsedUrl.pathname !== "/handoff/" + stampId ||
+    (parsedUrl.pathname !== chainAwarePath &&
+      !(
+        chainId === BASE_SEPOLIA_DEPLOYMENT.chainId &&
+        parsedUrl.pathname === legacySepoliaPath
+      )) ||
     parsedUrl.search !== "" ||
     parsedUrl.hash !== ""
   ) {
@@ -551,7 +590,7 @@ export function parseHandoffReceipt(
     schemaVersion: 1,
     type: "BaseStampHandoffReceipt",
     primaryType: HANDOFF_PRIMARY_TYPE,
-    domain: createHandoffDomain(),
+    domain: createHandoffDomain(chainId),
     types: HANDOFF_RECEIPT_TYPES,
     message: {
       statement: HANDOFF_STATEMENT,
