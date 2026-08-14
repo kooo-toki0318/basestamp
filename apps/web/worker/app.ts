@@ -794,13 +794,14 @@ export function createCoreApp(dependencies: Dependencies = {}) {
     requireOrigin(context.req.raw, authConfig);
     const body = await readJsonObject(context.req.raw);
     assertExactKeys(body, ["chainId", "idempotencyKey", "turnstileToken"]);
-    if (body.chainId !== BASE_SEPOLIA_DEPLOYMENT.chainId) {
+    if (!isAllowedChainId(body.chainId, authConfig)) {
       throw new ApiError(
         400,
         "unsupported_chain",
-        "Base Sepolia sponsorship is required."
+        "Unsupported sponsorship chain."
       );
     }
+    const chainId = body.chainId;
     const idempotencyKey = requireSponsorIdempotencyKey(body.idempotencyKey);
     const turnstileToken = requireTurnstileToken(body.turnstileToken);
     const session = await readSessionForRequest(
@@ -815,17 +816,17 @@ export function createCoreApp(dependencies: Dependencies = {}) {
         "Authentication is required."
       );
     }
-    if (session.chain_id !== BASE_SEPOLIA_DEPLOYMENT.chainId) {
+    if (session.chain_id !== chainId) {
       throw new ApiError(
         400,
         "unsupported_chain",
-        "Base Sepolia authentication is required."
+        "Authentication chain does not match sponsorship chain."
       );
     }
 
     const result = await issueGrant(context.env, {
       action: SPONSOR_TURNSTILE_ACTION,
-      chainId: BASE_SEPOLIA_DEPLOYMENT.chainId,
+      chainId,
       config: sponsorConfig,
       idempotencyKey,
       verifyHuman: () =>

@@ -4,13 +4,14 @@ import {
   type BuilderAttribution
 } from "./builder-attribution";
 import type { Translate } from "./i18n-context";
+import type { SupportedChainId } from "./lib/networks";
 import {
   createSponsorIdempotencyKey,
   type SponsorGrantResponse
 } from "./lib/sponsor";
 
 export type SponsorGrantRequest = {
-  chainId: 84532;
+  chainId: SupportedChainId;
   idempotencyKey?: string;
   turnstileToken: string;
 };

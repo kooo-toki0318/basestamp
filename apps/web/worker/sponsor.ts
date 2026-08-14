@@ -4,6 +4,7 @@ import {
   numberToBytes,
   type Address
 } from "viem";
+import type { SupportedChainId } from "../src/lib/networks";
 import {
   SPONSOR_GRANT_TTL_SECONDS,
   type SponsorGrantResponse
@@ -46,7 +47,7 @@ export type SponsorGrantRepository = {
 
 export type IssueSponsorGrantArguments = {
   action: string;
-  chainId: 84532;
+  chainId: SupportedChainId;
   config: SponsorConfig;
   idempotencyKey: string;
   now?: number;

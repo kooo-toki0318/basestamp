@@ -5,6 +5,7 @@ import {
   getAddress,
   isAddress,
   isAddressEqual,
+  numberToHex,
   type Address,
   type Hex
 } from "viem";
@@ -14,11 +15,14 @@ import {
   baseAccountAbi,
   baseAccountFactoryAbi
 } from "../src/lib/base-account";
-import { BASE_SEPOLIA_DEPLOYMENT } from "../src/lib/deployment";
+import { getDeployment } from "../src/lib/deployment";
+import {
+  isSupportedChainId,
+  type SupportedChainId
+} from "../src/lib/networks";
 import { registryAbi } from "../src/lib/registry";
 import { ApiError } from "./http";
 
-const BASE_SEPOLIA_HEX_CHAIN_ID = "0x14a34";
 const BUILDER_CODE_PATTERN = /^[A-Za-z0-9_-]{1,64}$/u;
 const UUID_V4_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
@@ -46,6 +50,7 @@ export type ParsedCounterfactualAccount = {
 };
 
 export type ValidatedPaymasterRequest = {
+  chainId: SupportedChainId;
   call: {
     contentCommitment: Hex;
     metadataHash: Hex;
@@ -125,6 +130,27 @@ function requireJsonRpcId(value: unknown): JsonRpcId {
   return rejectPaymasterRequest();
 }
 
+function requireSupportedChainId(value: unknown): SupportedChainId {
+  if (typeof value !== "string" || !/^0x[0-9a-fA-F]+$/u.test(value)) {
+    rejectPaymasterRequest();
+  }
+
+  let parsed: number;
+  try {
+    parsed = Number(BigInt(value));
+  } catch {
+    return rejectPaymasterRequest();
+  }
+
+  if (
+    !isSupportedChainId(parsed) ||
+    value.toLowerCase() !== numberToHex(parsed)
+  ) {
+    rejectPaymasterRequest();
+  }
+  return parsed;
+}
+
 function requireBuilderSuffix(data: Hex, builderCode: string): Hex {
   if (!BUILDER_CODE_PATTERN.test(builderCode)) rejectPaymasterRequest();
 
@@ -174,13 +200,17 @@ function decodeRegistryCall(data: Hex, builderCode: string) {
   }
 }
 
-function decodeAccountCall(data: Hex, builderCode: string) {
+function decodeAccountCall(
+  data: Hex,
+  builderCode: string,
+  registryAddress: Address
+) {
   try {
     const decoded = decodeFunctionData({ abi: baseAccountAbi, data });
     if (decoded.functionName !== "execute") rejectPaymasterRequest();
     const [target, value, registryData] = decoded.args;
     if (
-      !isAddressEqual(target, BASE_SEPOLIA_DEPLOYMENT.registryAddress) ||
+      !isAddressEqual(target, registryAddress) ||
       value !== 0n
     ) {
       rejectPaymasterRequest();
@@ -249,7 +279,8 @@ function requireContext(value: unknown) {
 function requireUserOperation(
   value: unknown,
   method: PaymasterMethod,
-  builderCode: string
+  builderCode: string,
+  registryAddress: Address
 ) {
   if (!isRecord(value)) rejectPaymasterRequest();
   const allowed = [
@@ -291,7 +322,7 @@ function requireUserOperation(
   }
   const callData = requireHexData(value.callData, MAX_CALLDATA_BYTES);
   return {
-    call: decodeAccountCall(callData, builderCode),
+    call: decodeAccountCall(callData, builderCode, registryAddress),
     counterfactualAccount: decodeInitCode(value.initCode),
     sender
   };
@@ -316,22 +347,25 @@ export function validatePaymasterRequest(
   if (!isUnknownArray(value.params) || value.params.length !== 4) {
     rejectPaymasterRequest();
   }
-  const [userOperation, entryPoint, chainId, context] = value.params;
+  const [userOperation, entryPoint, rawChainId, context] = value.params;
   if (
     typeof entryPoint !== "string" ||
     !isAddress(entryPoint) ||
-    !isAddressEqual(entryPoint, BASE_ACCOUNT_ENTRY_POINT) ||
-    chainId !== BASE_SEPOLIA_HEX_CHAIN_ID
+    !isAddressEqual(entryPoint, BASE_ACCOUNT_ENTRY_POINT)
   ) {
     rejectPaymasterRequest();
   }
+  const chainId = requireSupportedChainId(rawChainId);
+  const deployment = getDeployment(chainId);
   const parsedUserOperation = requireUserOperation(
     userOperation,
     method,
-    builderCode
+    builderCode,
+    deployment.registryAddress
   );
   return {
     ...parsedUserOperation,
+    chainId,
     context: requireContext(context),
     id,
     method,

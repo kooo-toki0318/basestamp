@@ -29,10 +29,7 @@ import {
   MAX_FILE_SIZE_BYTES,
   randomBytes32
 } from "../lib/crypto";
-import {
-  BASE_SEPOLIA_DEPLOYMENT,
-  getDeployment
-} from "../lib/deployment";
+import { getDeployment } from "../lib/deployment";
 import { createHandoffUrl } from "../lib/handoff";
 import {
   cacheCreatedVerificationPackage,
@@ -286,7 +283,6 @@ export function CreatePage({
   );
   const readyToRecord = walletState === "ready";
   const sponsorshipConfigured =
-    selectedChainId === BASE_SEPOLIA_DEPLOYMENT.chainId &&
     sponsorshipEnabled &&
     registryAvailable &&
     connectorId === "baseAccount" &&
@@ -297,7 +293,7 @@ export function CreatePage({
     isError: walletCapabilitiesFailed,
     isSuccess: walletCapabilitiesResolved
   } = useCapabilities({
-    chainId: BASE_SEPOLIA_DEPLOYMENT.chainId,
+    chainId: selectedChainId,
     query: {
       enabled: sponsorshipConfigured && address !== undefined
     }
@@ -561,7 +557,7 @@ export function CreatePage({
             setStatus(t("create.status.requestingSponsor"));
             activeGrant = await requestSponsorGrant(
               {
-                chainId: BASE_SEPOLIA_DEPLOYMENT.chainId,
+                chainId: deployment.chainId,
                 idempotencyKey: sponsorIdempotencyKey,
                 turnstileToken
               },
@@ -574,6 +570,7 @@ export function CreatePage({
           const submittedCalls = await sendCallsAsync(createSponsoredStampCall({
             account: address,
             builderDataSuffix: builderAttribution.dataSuffix,
+            chainId: deployment.chainId,
             contentCommitment: prepared.contentCommitment,
             grant: activeGrant,
             metadataHash: prepared.metadataHash,

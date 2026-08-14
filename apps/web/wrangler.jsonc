@@ -17,7 +17,7 @@
     "SIWE_ALLOWED_ORIGIN": "https://basestamp-web.ndun000.workers.dev",
     "SIWE_CHAIN_IDS": "84532,8453",
     "SECURITY_CONTACT_URL": "https://github.com/kooo-toki0318/basestamp/security/advisories/new",
-    "SPONSOR_POLICY_VERSION": "2",
+    "SPONSOR_POLICY_VERSION": "3",
     "SPONSOR_ALLOWED_ORIGINS": "https://keys.coinbase.com",
     "TURNSTILE_ALLOWED_HOSTNAMES": "basestamp-web.ndun000.workers.dev"
   },
@@ -48,6 +48,7 @@
       "SESSION_HASH_SECRET",
       "BASE_BUILDER_CODE",
       "CDP_PAYMASTER_URL",
+      "CDP_PAYMASTER_URL_MAINNET",
       "IP_BUCKET_HMAC_SECRET",
       "SPONSOR_ID_HMAC_SECRET",
       "TURNSTILE_SECRET_KEY",

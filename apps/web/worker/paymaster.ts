@@ -3,9 +3,12 @@ import {
   isAddressEqual,
   keccak256,
   http,
-  type Hex
+  type Chain,
+  type Hex,
+  type PublicClient,
+  type Transport
 } from "viem";
-import { baseSepolia } from "viem/chains";
+import { base, baseSepolia } from "viem/chains";
 import {
   BASE_ACCOUNT_ENTRY_POINT,
   BASE_ACCOUNT_FACTORY,
@@ -15,7 +18,10 @@ import {
   baseAccountAbi,
   baseAccountFactoryAbi
 } from "../src/lib/base-account";
-import { BASE_SEPOLIA_DEPLOYMENT } from "../src/lib/deployment";
+import {
+  BASE_SEPOLIA_DEPLOYMENT
+} from "../src/lib/deployment";
+import type { SupportedChainId } from "../src/lib/networks";
 import { SPONSOR_TURNSTILE_ACTION } from "../src/lib/sponsor";
 import { hmacSha256Hex, sha256Hex } from "./crypto";
 import { ApiError } from "./http";
@@ -164,8 +170,7 @@ function requireSecret(value: string | undefined): string {
   return secret;
 }
 
-function getPaymasterConfig(env: Bindings) {
-  const sponsorConfig = getSponsorConfig(env);
+function requireBuilderCode(env: Bindings): string {
   const builderCode = env.BASE_BUILDER_CODE?.trim() ?? "";
   if (!BUILDER_CODE_PATTERN.test(builderCode)) {
     throw new ApiError(
@@ -174,8 +179,11 @@ function getPaymasterConfig(env: Bindings) {
       "Sponsorship is not configured."
     );
   }
+  return builderCode;
+}
 
-  const paymasterUrlValue = env.CDP_PAYMASTER_URL?.trim() ?? "";
+function requirePaymasterUrl(value: string | undefined): string {
+  const paymasterUrlValue = value?.trim() ?? "";
   let paymasterUrl: URL;
   try {
     paymasterUrl = new URL(paymasterUrlValue);
@@ -198,13 +206,53 @@ function getPaymasterConfig(env: Bindings) {
       "Sponsorship is not configured."
     );
   }
+  return paymasterUrl.href;
+}
+
+function getPaymasterConfig(
+  env: Bindings,
+  chainId: SupportedChainId,
+  builderCode: string
+) {
+  const sponsorConfig = getSponsorConfig(env);
+  const paymasterUrl =
+    chainId === base.id
+      ? requirePaymasterUrl(env.CDP_PAYMASTER_URL_MAINNET)
+      : requirePaymasterUrl(env.CDP_PAYMASTER_URL);
+
   return {
     builderCode,
     ipBucketHmacSecret: requireSecret(env.IP_BUCKET_HMAC_SECRET),
-    paymasterUrl: paymasterUrl.href,
+    paymasterUrl,
     policyVersion: sponsorConfig.policyVersion,
     sponsorIdHmacSecret: sponsorConfig.sponsorIdHmacSecret
   };
+}
+
+function requireMainnetRpcUrl(env: Bindings): string {
+  const value = env.MAINNET_RPC_URL?.trim() ?? "";
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new ApiError(
+      503,
+      "sponsor_not_configured",
+      "Sponsorship is not configured."
+    );
+  }
+  if (
+    parsed.protocol !== "https:" ||
+    parsed.username !== "" ||
+    parsed.password !== ""
+  ) {
+    throw new ApiError(
+      503,
+      "sponsor_not_configured",
+      "Sponsorship is not configured."
+    );
+  }
+  return value;
 }
 
 function canonicalJson(value: unknown): string {
@@ -436,13 +484,13 @@ function rejectUnsupportedAccount(): never {
   );
 }
 
-async function defaultVerifyBaseAccount(
+async function verifyBaseAccountWithClient<
+  transport extends Transport,
+  chain extends Chain | undefined
+>(
+  client: PublicClient<transport, chain>,
   request: ValidatedPaymasterRequest
 ): Promise<void> {
-  const client = createPublicClient({
-    chain: baseSepolia,
-    transport: http(BASE_SEPOLIA_DEPLOYMENT.rpcUrl)
-  });
   try {
     const block = await client.getBlock();
     const [factoryCode, implementationCode, senderCode] = await Promise.all([
@@ -517,9 +565,29 @@ async function defaultVerifyBaseAccount(
   }
 }
 
+async function defaultVerifyBaseAccount(
+  env: Bindings,
+  request: ValidatedPaymasterRequest
+): Promise<void> {
+  if (request.chainId === base.id) {
+    const client = createPublicClient({
+      chain: base,
+      transport: http(requireMainnetRpcUrl(env))
+    });
+    return verifyBaseAccountWithClient(client, request);
+  }
+
+  const client = createPublicClient({
+    chain: baseSepolia,
+    transport: http(BASE_SEPOLIA_DEPLOYMENT.rpcUrl)
+  });
+  return verifyBaseAccountWithClient(client, request);
+}
+
 function claimIsAuthorized(
   claim: SponsorClaim | null,
   arguments_: {
+    chainId: SupportedChainId;
     grantTokenHash: string;
     grantWalletKey: string;
     now: number;
@@ -529,7 +597,7 @@ function claimIsAuthorized(
   return (
     claim !== null &&
     claim.action === SPONSOR_TURNSTILE_ACTION &&
-    claim.chainId === BASE_SEPOLIA_DEPLOYMENT.chainId &&
+    claim.chainId === arguments_.chainId &&
     claim.policyVersion === arguments_.policyVersion &&
     claim.grantExpiresAt > arguments_.now &&
     claim.grantTokenHash === arguments_.grantTokenHash &&
@@ -547,8 +615,15 @@ export function utcMonthStart(now: number): number {
 export async function proxyPaymasterRequest(
   arguments_: ProxyPaymasterArguments
 ): Promise<ProxyPaymasterResponse> {
-  const config = getPaymasterConfig(arguments_.env);
-  const request = validatePaymasterRequest(arguments_.request, config.builderCode);
+  getSponsorConfig(arguments_.env);
+
+  const builderCode = requireBuilderCode(arguments_.env);
+  const request = validatePaymasterRequest(arguments_.request, builderCode);
+  const config = getPaymasterConfig(
+    arguments_.env,
+    request.chainId,
+    builderCode
+  );
   const now = arguments_.now ?? Math.floor(Date.now() / 1_000);
   const dayStart = Math.floor(now / 86_400) * 86_400;
   const monthStart = utcMonthStart(now);
@@ -557,12 +632,13 @@ export async function proxyPaymasterRequest(
   const grantTokenHash = await sha256Hex(request.context.grantToken);
   const grantWalletKey = await createWalletSponsorKey(
     config.sponsorIdHmacSecret,
-    BASE_SEPOLIA_DEPLOYMENT.chainId,
+    request.chainId,
     request.sender
   );
   const fingerprintHash = await requestFingerprint(request);
   const claim = await repository.findClaim(request.context.claimId);
   if (!claimIsAuthorized(claim, {
+    chainId: request.chainId,
     grantTokenHash,
     grantWalletKey,
     now,
@@ -594,7 +670,11 @@ export async function proxyPaymasterRequest(
   }
   if (claim.status !== "grant_issued") rejectSponsorship();
 
-  await (arguments_.accountVerifier ?? defaultVerifyBaseAccount)(request);
+  if (arguments_.accountVerifier !== undefined) {
+    await arguments_.accountVerifier(request);
+  } else {
+    await defaultVerifyBaseAccount(arguments_.env, request);
+  }
   const ipBucketKey = await createIpBucketKey(
     config.ipBucketHmacSecret,
     arguments_.remoteIp,
@@ -602,7 +682,7 @@ export async function proxyPaymasterRequest(
   );
   const walletQuotaBypassed = await repository.isWalletQuotaBypassed({
     action: SPONSOR_TURNSTILE_ACTION,
-    chainId: BASE_SEPOLIA_DEPLOYMENT.chainId,
+    chainId: request.chainId,
     now,
     walletAddress: request.sender.toLowerCase()
   });
