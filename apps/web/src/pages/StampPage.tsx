@@ -330,7 +330,7 @@ export function StampPage({
                   }
                 }
               }}
-              disabled={busy || package_ === undefined}
+              disabled={busy && package_ !== undefined}
             />
           </label>
           <button

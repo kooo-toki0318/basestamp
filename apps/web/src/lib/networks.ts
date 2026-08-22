@@ -17,6 +17,8 @@ export type SupportedChainId = (typeof BASE_NETWORKS)[number]["chainId"];
 
 export type BaseNetwork = (typeof BASE_NETWORKS)[number];
 
+export const DEFAULT_BASE_CHAIN_ID: SupportedChainId = 8453;
+
 export function isMainnetWriteFlagEnabled(
   value: string | undefined
 ): boolean {

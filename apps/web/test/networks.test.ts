@@ -1,10 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
+  DEFAULT_BASE_CHAIN_ID,
   isMainnetWriteFlagEnabled,
   isRegistryWriteAvailable
 } from "../src/lib/networks";
 
 describe("Registry write release gates", () => {
+  it("uses Base Mainnet as the initial application network", () => {
+    expect(DEFAULT_BASE_CHAIN_ID).toBe(8453);
+  });
+
   it("treats only the exact public build flag as enabled", () => {
     expect(isMainnetWriteFlagEnabled(undefined)).toBe(false);
     expect(isMainnetWriteFlagEnabled("false")).toBe(false);

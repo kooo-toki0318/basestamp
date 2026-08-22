@@ -35,6 +35,7 @@ import { VerifyStartPage } from "./pages/VerifyStartPage";
 import { getPublicInformationPage } from "./public-pages";
 import {
   BASE_NETWORKS,
+  DEFAULT_BASE_CHAIN_ID,
   getBaseNetwork,
   isSupportedChainId,
   type SupportedChainId
@@ -130,7 +131,7 @@ export function App() {
   });
   const [authBusy, setAuthBusy] = useState(false);
   const [selectedChainId, setSelectedChainId] =
-    useState<SupportedChainId>(84532);
+    useState<SupportedChainId>(DEFAULT_BASE_CHAIN_ID);
   const lastAutoSwitch = useRef<string | undefined>(undefined);
   const adoptedWalletConnection = useRef<string | undefined>(undefined);
   const lastAutoAuthentication = useRef<string | undefined>(undefined);
