@@ -103,12 +103,8 @@ function repositoryFor(claim: SponsorClaim): SponsorProxyRepository {
     completeStub: () => Promise.resolve(),
     deny: () => Promise.resolve(),
     findClaim: () => Promise.resolve(claim),
-    isWalletQuotaBypassed: ({ chainId }) => {
-      expect(chainId).toBe(8453);
-      return Promise.resolve(false);
-    },
     release: () => Promise.resolve(),
-    reserve: () => Promise.resolve()
+    reserve: () => Promise.resolve(true)
   };
 }
 
@@ -129,7 +125,6 @@ describe("Base Mainnet sponsorship", () => {
         "https://api.developer.coinbase.com/rpc/v1/base-sepolia/test",
       CDP_PAYMASTER_URL_MAINNET:
         "https://api.developer.coinbase.com/rpc/v1/base/test",
-      IP_BUCKET_HMAC_SECRET: "p".repeat(32),
       MAINNET_RPC_URL:
         "https://api.developer.coinbase.com/rpc/v1/base/node-test",
       SPONSOR_ENABLED: "true",
@@ -153,7 +148,6 @@ describe("Base Mainnet sponsorship", () => {
           result: { paymasterAndData: PAYMASTER_AND_DATA }
         });
       },
-      remoteIp: "203.0.113.10",
       repository: repositoryFor(await mainnetClaim()),
       request: mainnetRequest()
     });

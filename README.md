@@ -111,10 +111,10 @@ Available:
 - local previews for common image, video, audio, PDF, and text formats;
 - salted SHA-256 commitments calculated in a browser worker;
 - wallet-confirmed Base Sepolia Registry transactions, including a live-validation Base Account sponsorship path with an explicit wallet-paid alternative;
-- Turnstile-gated, wallet-bound sponsorship grants and a Worker Paymaster proxy with strict UserOperation validation, D1 quotas, and retention cleanup;
-- real-D1 concurrency coverage proving that the monthly wallet quota admits at
-  most three simultaneous sponsorship reservations and rolls failed
-  reservations back atomically;
+- Turnstile-gated, wallet- and chain-bound sponsorship grants and a Worker Paymaster proxy with strict UserOperation validation, per-claim concurrency locking, and retention cleanup;
+- real-D1 concurrency coverage proving that one claim admits only one active
+  Paymaster RPC reservation while repeated ERC-7677 requests are not counted
+  as separate transactions;
 - automatic verification-package download;
 - private fragment handoff URLs with explicit copy, Web Share, and local QR;
 - local recipient comparison with no file or salt upload;
@@ -291,7 +291,8 @@ The browser-facing Paymaster proxy accepts CORS only from the exact Base
 Account popup origins listed in `SPONSOR_ALLOWED_ORIGINS`; the current
 production value is `https://keys.coinbase.com`. This is a non-secret
 allowlist, not an authentication control: every request still requires a
-short-lived grant and passes the server-side call and quota policy.
+short-lived grant and passes server-side grant, wallet/chain binding, and call
+validation. Sponsorship eligibility and provider-side limits are set in CDP.
 
 The `/security` page and `/.well-known/security.txt` use the repository's
 enabled GitHub Private Vulnerability Reporting channel. Both

@@ -52,7 +52,6 @@ await writeIfMissing(
     "SECURITY_CONTACT_URL=",
     "SPONSOR_POLICY_VERSION=2",
     `SESSION_HASH_SECRET=${randomBytes(32).toString("hex")}`,
-    "IP_BUCKET_HMAC_SECRET=",
     "SPONSOR_ID_HMAC_SECRET=",
     "TURNSTILE_SECRET_KEY=",
     "CDP_PAYMASTER_URL=",

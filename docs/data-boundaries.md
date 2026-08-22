@@ -57,23 +57,21 @@ Authentication nonces and session tokens are stored only as cryptographic
 hashes. Handoff acknowledgement nonces are also stored only as hashes, together
 with a stamp ID, statement version, wallet, chain, expiry, and use time. No table
 may contain file bytes, file metadata, a content salt, free text, a raw IP
-address, or a raw session token. A raw wallet sponsor identity is prohibited
-except for the narrow operator test-wallet exception below.
+address, or a raw session token. Sponsor claims retain only bounded grant and
+claim state, hashed tokens, wallet/chain binding, idempotency and request
+fingerprints, concurrency state, and minimal Paymaster response data.
 The deployed Registry is the canonical source for
 stamps; `stamp_refs` is only short-lived UI reference state.
 
-The eighth durable table is a reviewed exception to the original seven-table
-boundary:
-`sponsor_wallet_allowlist` contains only a lowercase Base Sepolia test-wallet
-address, fixed chain and action, and creation/expiry timestamps. It exists so a
-small number of operator-owned test wallets can bypass the monthly wallet
-quota without weakening Turnstile, call validation, or daily quotas. It cannot
-contain notes or user-supplied text, has no Mainnet chain option, and expired
-rows are removed by scheduled cleanup. Production users must never be added.
-The ninth table, `sponsor_reservation_assertions`, is a transaction-local D1
-guard used to force an atomic batch rollback when any quota assertion fails.
-Its rows contain only a claim ID and boolean validity marker and are deleted in
-the same successful batch; they are not retained application data.
+`quota_counters`, `rate_limit_buckets`, `sponsor_wallet_allowlist`, and
+`sponsor_reservation_assertions` are legacy schema retained for migration and
+cleanup compatibility. They are not used to count sponsored transactions or to
+decide current sponsorship eligibility. Existing allowlist rows contain a raw
+test-wallet address, chain, action, and creation/expiry timestamps and are
+removed when expired; production users must not be added. Reservation assertion
+rows contain only a claim ID and boolean validity marker and are not retained
+application data. Paymaster stub and final-data RPC calls can both occur while
+one wallet transaction is being prepared and are not treated as transactions.
 
 Core retention is enforced hourly:
 
@@ -83,15 +81,13 @@ Core retention is enforced hourly:
 | Active or revoked sessions | 48 hours after expiry or revocation |
 | Stamp UI references | 7 days after creation |
 | Handoff challenges | 48 hours after expiry |
-| Sponsor grant, idempotency, and minimal CDP response | 30 days after terminal state |
-| Daily quota counters | 48 hours after the UTC day ends |
-| Monthly budget counters | 62 days after the month ends |
-| HMAC IP buckets | Until their fixed expiry, at most 48 hours |
-| Test-wallet allowlist | Until its mandatory expiry |
+| Sponsor grants, claims, request fingerprints, concurrency state, and minimal CDP responses | 30 days after terminal state |
+| Legacy daily counter or bucket rows, if present | 48 hours after their recorded period |
+| Legacy monthly counter rows, if present | 62 days after their recorded month |
+| Legacy test-wallet allowlist rows | Until their mandatory expiry |
 
-After 30 days, a successful sponsor claim is removed. The HMAC wallet quota is
-kept only in its monthly aggregate counter, which is removed no later than 62
-days after that UTC month ends and is not treated as anonymous data.
+After 30 days, a terminal sponsor claim is removed. CDP Paymaster policy, not
+these legacy D1 tables, determines sponsorship eligibility and limits.
 `/api/health/retention` reports whether the hourly cleanup has succeeded within
 its two-hour service window.
 

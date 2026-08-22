@@ -37,13 +37,13 @@ Onchain state remains the canonical source for stamps.
 | File upload or accidental exfiltration | No upload route; file bytes and salts are handled only in the browser |
 | Paymaster credential abuse | Worker-only CDP URL, short-lived wallet-bound grant, deep UserOperation decoding, and a second CDP contract/function policy |
 | Cross-origin Paymaster abuse | Exact Base Account popup-origin allowlist on the Paymaster route; POST and Content-Type only; no credentialed CORS |
-| Sponsor quota races | Atomic D1 reservation with wallet-month, HMAC IP-day, and service-day assertions before provider forwarding |
+| Concurrent Paymaster RPCs for one claim | Atomic per-claim D1 reservation lock; stub and final-data RPCs used to prepare one transaction are not counted as separate transactions |
 | Wallet-selected fee-path confusion | Wallet capability detection, non-optional app Paymaster request, no automatic wallet-paid fallback, and live D1 confirmation required for release evidence |
 
 ## Out of scope
 
 x402 and Mainnet writes remain disabled. Base Sepolia sponsorship is enabled
-only for release validation and includes Turnstile, sponsor grants, rate
-limits, hourly cleanup, and retention health. A successful wallet transaction
+only for release validation and includes Turnstile, sponsor grants, per-claim
+concurrency control, hourly cleanup, and retention health. A successful wallet transaction
 alone does not prove that BaseStamp's Paymaster was used; release evidence must
 also show the matching D1 claim reached its sponsored state.

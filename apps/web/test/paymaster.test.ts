@@ -16,8 +16,7 @@ import { sha256Hex } from "../worker/crypto";
 import {
   proxyPaymasterRequest,
   type SponsorClaim,
-  type SponsorProxyRepository,
-  utcMonthStart
+  type SponsorProxyRepository
 } from "../worker/paymaster";
 import { createWalletSponsorKey } from "../worker/sponsor";
 import type { Bindings } from "../worker/types";
@@ -37,7 +36,6 @@ const SPONSOR_SECRET = "i".repeat(32);
 const env = {
   BASE_BUILDER_CODE: BUILDER_CODE,
   CDP_PAYMASTER_URL: "https://api.developer.coinbase.com/rpc/v1/base-sepolia/example",
-  IP_BUCKET_HMAC_SECRET: "p".repeat(32),
   SPONSOR_ENABLED: "true",
   SPONSOR_ID_HMAC_SECRET: SPONSOR_SECRET,
   SPONSOR_POLICY_VERSION: "2",
@@ -122,22 +120,32 @@ async function createClaim(
   };
 }
 
-function createRepository(claim: SponsorClaim, allowlisted = false) {
+function createRepository(
+  claim: SponsorClaim,
+  busyReservations = 0
+) {
   const events: string[] = [];
   let current = claim;
+  let remainingBusyReservations = busyReservations;
+  let resumeStatus = claim.status === "sponsored" ? "sponsored" : "grant_issued";
+
   const repository: SponsorProxyRepository = {
     findClaim: () => Promise.resolve(current),
-    isWalletQuotaBypassed: () => Promise.resolve(allowlisted),
     reserve(reservation) {
-      events.push(
-        `reserve:${String(reservation.walletQuotaBypassed)}:${String(reservation.monthStart)}`
-      );
+      if (remainingBusyReservations > 0) {
+        remainingBusyReservations -= 1;
+        events.push("busy");
+        return Promise.resolve(false);
+      }
+
+      events.push("reserve");
+      resumeStatus = current.status === "sponsored" ? "sponsored" : "grant_issued";
       current = {
         ...current,
         requestFingerprintHash: reservation.fingerprintHash,
         status: "requested"
       };
-      return Promise.resolve();
+      return Promise.resolve(true);
     },
     completeSponsored(completion) {
       events.push("sponsored");
@@ -154,7 +162,7 @@ function createRepository(claim: SponsorClaim, allowlisted = false) {
       current = {
         ...current,
         requestFingerprintHash: null,
-        status: "grant_issued",
+        status: resumeStatus,
         stubFingerprintHash: completion.fingerprintHash,
         stubResponseJson: completion.responseJson
       };
@@ -162,12 +170,12 @@ function createRepository(claim: SponsorClaim, allowlisted = false) {
     },
     deny() {
       events.push("denied");
-      current = { ...current, status: "denied" };
+      current = { ...current, status: resumeStatus === "sponsored" ? "sponsored" : "denied" };
       return Promise.resolve();
     },
     release() {
       events.push("released");
-      current = { ...current, status: "grant_issued" };
+      current = { ...current, status: resumeStatus };
       return Promise.resolve();
     }
   };
@@ -175,14 +183,42 @@ function createRepository(claim: SponsorClaim, allowlisted = false) {
 }
 
 describe("Paymaster proxy", () => {
-  it("calculates wallet quota months at the UTC month boundary", () => {
-    expect(utcMonthStart(Date.parse("2026-08-31T23:59:59Z") / 1_000))
-      .toBe(Date.parse("2026-08-01T00:00:00Z") / 1_000);
-    expect(utcMonthStart(Date.parse("2026-09-01T00:00:00Z") / 1_000))
-      .toBe(Date.parse("2026-09-01T00:00:00Z") / 1_000);
+  it("retries a busy claim reservation instead of treating concurrency as unavailable", async () => {
+    const memory = createRepository(
+      await createClaim(),
+      1
+    );
+    let providerCalls = 0;
+
+    const response = await proxyPaymasterRequest({
+      accountVerifier: () => Promise.resolve(),
+      env,
+      now: NOW,
+      provider: () => {
+        providerCalls += 1;
+        return Promise.resolve({
+          jsonrpc: "2.0",
+          id: 7,
+          result: { paymasterAndData: PAYMASTER_AND_DATA }
+        });
+      },
+      repository: memory.repository,
+      request: createRequest()
+    });
+
+    expect(response).toEqual({
+      id: 7,
+      result: { paymasterAndData: PAYMASTER_AND_DATA }
+    });
+    expect(providerCalls).toBe(1);
+    expect(memory.events).toEqual([
+      "busy",
+      "reserve",
+      "sponsored"
+    ]);
   });
 
-  it("consumes the monthly wallet quota only after a valid final response", async () => {
+  it("marks a valid final Paymaster response as sponsored", async () => {
     const memory = createRepository(await createClaim());
     let accountVerified = false;
     const response = await proxyPaymasterRequest({
@@ -203,7 +239,6 @@ describe("Paymaster proxy", () => {
           result: { paymasterAndData: PAYMASTER_AND_DATA }
         });
       },
-      remoteIp: "203.0.113.10",
       repository: memory.repository,
       request: createRequest()
     });
@@ -214,46 +249,69 @@ describe("Paymaster proxy", () => {
     });
     expect(accountVerified).toBe(true);
     expect(memory.events).toEqual([
-      `reserve:false:${String(utcMonthStart(NOW))}`,
+      "reserve",
       "sponsored"
     ]);
   });
 
-  it("returns a cached final response without reaching the account RPC or provider again", async () => {
-    const firstMemory = createRepository(await createClaim());
-    const request = createRequest();
-    const provider = () => Promise.resolve({
-      jsonrpc: "2.0",
-      id: 7,
-      result: { paymasterAndData: PAYMASTER_AND_DATA }
-    });
+  it("requeries the provider after sponsorship when only gas fields change", async () => {
+    const memory = createRepository(await createClaim());
+    const firstRequest = createRequest();
+
     await proxyPaymasterRequest({
       accountVerifier: () => Promise.resolve(),
       env,
       now: NOW,
-      provider,
-      remoteIp: "203.0.113.10",
-      repository: firstMemory.repository,
-      request
+      provider: () =>
+        Promise.resolve({
+          jsonrpc: "2.0",
+          id: 7,
+          result: { paymasterAndData: PAYMASTER_AND_DATA }
+        }),
+      repository: memory.repository,
+      request: firstRequest
     });
-    let externalCalls = 0;
-    const retried = await proxyPaymasterRequest({
+
+    const replayRequest = createRequest();
+    const replayUserOperation =
+      replayRequest.params[0] as Record<string, unknown>;
+
+    replayUserOperation.callGasLimit = "0x20000";
+    replayUserOperation.preVerificationGas = "0xd000";
+
+    let providerCalls = 0;
+    let accountVerifierCalls = 0;
+
+    const replayed = await proxyPaymasterRequest({
       accountVerifier: () => {
-        externalCalls += 1;
+        accountVerifierCalls += 1;
         return Promise.resolve();
       },
       env,
       now: NOW,
       provider: () => {
-        externalCalls += 1;
-        return Promise.resolve({});
+        providerCalls += 1;
+        return Promise.resolve({
+          jsonrpc: "2.0",
+          id: 7,
+          result: { paymasterAndData: PAYMASTER_AND_DATA }
+        });
       },
-      remoteIp: "203.0.113.10",
-      repository: firstMemory.repository,
-      request
+      repository: memory.repository,
+      request: replayRequest
     });
-    expect(retried.result).toEqual({ paymasterAndData: PAYMASTER_AND_DATA });
-    expect(externalCalls).toBe(0);
+
+    expect(replayed.result).toEqual({
+      paymasterAndData: PAYMASTER_AND_DATA
+    });
+    expect(providerCalls).toBe(1);
+    expect(accountVerifierCalls).toBe(0);
+    expect(memory.events).toEqual([
+      "reserve",
+      "sponsored",
+      "reserve",
+      "sponsored"
+    ]);
   });
 
   it("releases a temporary reservation after a provider transport failure", async () => {
@@ -263,12 +321,11 @@ describe("Paymaster proxy", () => {
       env,
       now: NOW,
       provider: () => Promise.reject(new Error("network down")),
-      remoteIp: "203.0.113.10",
       repository: memory.repository,
       request: createRequest()
     })).rejects.toMatchObject({ code: "sponsor_provider_unavailable", status: 503 });
     expect(memory.events).toEqual([
-      `reserve:false:${String(utcMonthStart(NOW))}`,
+      "reserve",
       "released"
     ]);
   });
@@ -284,7 +341,6 @@ describe("Paymaster proxy", () => {
         id: 7,
         result: { paymasterAndData: "0x1234" }
       }),
-      remoteIp: "203.0.113.10",
       repository: memory.repository,
       request: createRequest()
     })).rejects.toMatchObject({
@@ -292,7 +348,7 @@ describe("Paymaster proxy", () => {
       status: 503
     });
     expect(memory.events).toEqual([
-      `reserve:false:${String(utcMonthStart(NOW))}`,
+      "reserve",
       "released"
     ]);
   });
@@ -308,7 +364,6 @@ describe("Paymaster proxy", () => {
         id: 7,
         result: { paymasterAndData: `0x${"00".repeat(20)}11` }
       }),
-      remoteIp: "203.0.113.10",
       repository: memory.repository,
       request: createRequest()
     })).rejects.toMatchObject({
@@ -316,7 +371,7 @@ describe("Paymaster proxy", () => {
       status: 503
     });
     expect(memory.events).toEqual([
-      `reserve:false:${String(utcMonthStart(NOW))}`,
+      "reserve",
       "released"
     ]);
   });
@@ -335,7 +390,6 @@ describe("Paymaster proxy", () => {
           sponsor: { name: "BaseStamp", icon: SAFE_PNG_ICON }
         }
       }),
-      remoteIp: "203.0.113.10",
       repository: memory.repository,
       request: createRequest("pm_getPaymasterStubData")
     });
@@ -344,7 +398,7 @@ describe("Paymaster proxy", () => {
       sponsor: { name: "BaseStamp", icon: SAFE_PNG_ICON }
     });
     expect(memory.events).toEqual([
-      `reserve:false:${String(utcMonthStart(NOW))}`,
+      "reserve",
       "stub"
     ]);
   });
@@ -370,7 +424,6 @@ describe("Paymaster proxy", () => {
             sponsor: { name: "BaseStamp", icon }
           }
         }),
-        remoteIp: "203.0.113.10",
         repository: memory.repository,
         request: createRequest("pm_getPaymasterStubData")
       });
@@ -379,7 +432,7 @@ describe("Paymaster proxy", () => {
         sponsor: { name: "BaseStamp" }
       });
       expect(memory.events).toEqual([
-        `reserve:false:${String(utcMonthStart(NOW))}`,
+        "reserve",
         "stub"
       ]);
     }
@@ -399,7 +452,6 @@ describe("Paymaster proxy", () => {
           sponsor: { name: "BaseStamp" }
         }
       }),
-      remoteIp: "203.0.113.10",
       repository: memory.repository,
       request: createRequest()
     })).rejects.toMatchObject({
@@ -407,12 +459,12 @@ describe("Paymaster proxy", () => {
       status: 503
     });
     expect(memory.events).toEqual([
-      `reserve:false:${String(utcMonthStart(NOW))}`,
+      "reserve",
       "released"
     ]);
   });
 
-  it("makes an explicit provider denial terminal without consuming quota", async () => {
+  it("makes an explicit provider denial terminal", async () => {
     const memory = createRepository(await createClaim());
     await expect(proxyPaymasterRequest({
       accountVerifier: () => Promise.resolve(),
@@ -423,12 +475,11 @@ describe("Paymaster proxy", () => {
         id: 7,
         error: { code: -32000, message: "denied", secret: "must-not-leak" }
       }),
-      remoteIp: "203.0.113.10",
       repository: memory.repository,
       request: createRequest()
     })).rejects.toMatchObject({ code: "sponsor_provider_rejected", status: 403 });
     expect(memory.events).toEqual([
-      `reserve:false:${String(utcMonthStart(NOW))}`,
+      "reserve",
       "denied"
     ]);
   });
@@ -449,7 +500,6 @@ describe("Paymaster proxy", () => {
         externalCalls += 1;
         return Promise.resolve({});
       },
-      remoteIp: "203.0.113.10",
       repository: memory.repository,
       request: createRequest()
     })).rejects.toMatchObject({ code: "sponsor_request_rejected", status: 403 });
@@ -457,7 +507,7 @@ describe("Paymaster proxy", () => {
     expect(memory.events).toEqual([]);
   });
 
-  it("caches a non-final stub response without consuming the monthly slot", async () => {
+  it("caches a non-final stub response for the claim", async () => {
     const memory = createRepository(await createClaim());
     let providerCalls = 0;
     const request = createRequest("pm_getPaymasterStubData");
@@ -473,7 +523,6 @@ describe("Paymaster proxy", () => {
           result: { paymasterAndData: PAYMASTER_AND_DATA, isFinal: false }
         });
       },
-      remoteIp: "203.0.113.10",
       repository: memory.repository,
       request
     });
@@ -481,29 +530,9 @@ describe("Paymaster proxy", () => {
     await call();
     expect(providerCalls).toBe(1);
     expect(memory.events).toEqual([
-      `reserve:false:${String(utcMonthStart(NOW))}`,
+      "reserve",
       "stub"
     ]);
   });
 
-  it("marks a D1-allowlisted Sepolia wallet as monthly-quota-bypassed", async () => {
-    const memory = createRepository(await createClaim(), true);
-    await proxyPaymasterRequest({
-      accountVerifier: () => Promise.resolve(),
-      env,
-      now: NOW,
-      provider: () => Promise.resolve({
-        jsonrpc: "2.0",
-        id: 7,
-        result: { paymasterAndData: PAYMASTER_AND_DATA }
-      }),
-      remoteIp: "203.0.113.10",
-      repository: memory.repository,
-      request: createRequest()
-    });
-    expect(memory.events).toEqual([
-      `reserve:true:${String(utcMonthStart(NOW))}`,
-      "sponsored"
-    ]);
-  });
 });

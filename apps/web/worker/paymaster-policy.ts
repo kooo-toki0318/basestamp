@@ -457,7 +457,7 @@ function requireUserOperation(
  *
  * Wallet/AA tooling is intentionally allowed to evolve the UserOperation
  * object. Contract/function restrictions belong in the CDP Paymaster policy,
- * while BaseStamp keeps grant, wallet, chain, quota, and response validation.
+ * while BaseStamp keeps grant, wallet, chain, concurrency, and response validation.
  */
 export function validatePaymasterEnvelope(
   value: unknown

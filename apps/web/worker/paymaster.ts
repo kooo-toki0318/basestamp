@@ -23,23 +23,21 @@ import {
 } from "../src/lib/deployment";
 import type { SupportedChainId } from "../src/lib/networks";
 import { SPONSOR_TURNSTILE_ACTION } from "../src/lib/sponsor";
-import { hmacSha256Hex, sha256Hex } from "./crypto";
+import { sha256Hex } from "./crypto";
 import { ApiError } from "./http";
 import {
   validatePaymasterEnvelope,
   type ValidatedPaymasterEnvelope,
   type ValidatedPaymasterRequest
 } from "./paymaster-policy";
-import {
-  createWalletSponsorKey,
-  getSponsorConfig
-} from "./sponsor";
+import { createWalletSponsorKey, getSponsorConfig } from "./sponsor";
 import type { Bindings } from "./types";
 
 const PROVIDER_TIMEOUT_MS = 10_000;
 const MAX_PROVIDER_RESPONSE_BYTES = 20_000;
+const RESERVATION_RETRY_DELAY_MS = 50;
+const RESERVATION_WAIT_TIMEOUT_MS = PROVIDER_TIMEOUT_MS + 500;
 const BUILDER_CODE_PATTERN = /^[A-Za-z0-9_-]{1,64}$/u;
-const IP_ADDRESS_PATTERN = /^[0-9A-Fa-f:.]{2,64}$/u;
 const HEX_DATA_PATTERN = /^0x(?:[0-9a-fA-F]{2})+$/u;
 const BASE64_PATTERN =
   /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u;
@@ -90,26 +88,16 @@ export type SponsorProxyRepository = {
   }): Promise<void>;
   deny(claimId: string, now: number): Promise<void>;
   findClaim(claimId: string): Promise<SponsorClaim | null>;
-  isWalletQuotaBypassed(arguments_: {
-    action: string;
-    chainId: number;
-    now: number;
-    walletAddress: string;
-  }): Promise<boolean>;
   release(claimId: string): Promise<void>;
   reserve(arguments_: {
     claimId: string;
-    dayStart: number;
     fingerprintHash: string;
     grantTokenHash: string;
     grantWalletKey: string;
-    ipBucketKey: string;
     method: ValidatedPaymasterRequest["method"];
-    monthStart: number;
     now: number;
     policyVersion: number;
-    walletQuotaBypassed: boolean;
-  }): Promise<void>;
+  }): Promise<boolean>;
 };
 
 export type PaymasterAccountVerifier = (
@@ -126,7 +114,6 @@ export type ProxyPaymasterArguments = {
   env: Bindings;
   now?: number;
   provider?: PaymasterProvider;
-  remoteIp: string | undefined;
   repository?: SponsorProxyRepository;
   request: unknown;
 };
@@ -151,24 +138,18 @@ function providerUnavailable(): never {
   );
 }
 
+function wait(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, milliseconds);
+  });
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function hasOnlyKeys(value: Record<string, unknown>, allowed: readonly string[]) {
   return Object.keys(value).every((key) => allowed.includes(key));
-}
-
-function requireSecret(value: string | undefined): string {
-  const secret = value ?? "";
-  if (secret.length < 32 || secret.trim() !== secret) {
-    throw new ApiError(
-      503,
-      "sponsor_not_configured",
-      "Sponsorship is not configured."
-    );
-  }
-  return secret;
 }
 
 function requireBuilderCode(env: Bindings): string {
@@ -223,7 +204,6 @@ function getPaymasterConfig(
 
   return {
     builderCode,
-    ipBucketHmacSecret: requireSecret(env.IP_BUCKET_HMAC_SECRET),
     paymasterUrl,
     policyVersion: sponsorConfig.policyVersion,
     sponsorIdHmacSecret: sponsorConfig.sponsorIdHmacSecret
@@ -275,22 +255,21 @@ function canonicalJson(value: unknown): string {
   rejectSponsorship();
 }
 
+/**
+ * Per-RPC fingerprint used only for audit/cache/idempotency.
+ *
+ * ERC-7677 deliberately lets the wallet perform gas estimation between
+ * pm_getPaymasterStubData and pm_getPaymasterData, so this fingerprint MUST
+ * NOT be treated as a stable "transaction identity" across those calls.
+ */
 function requestFingerprint(request: ValidatedPaymasterEnvelope): Promise<string> {
   const params = request.raw.params;
   if (!Array.isArray(params)) rejectSponsorship();
-  return sha256Hex(canonicalJson({ method: request.method, params: params.slice(0, 3) }));
-}
-
-async function createIpBucketKey(
-  secret: string,
-  remoteIp: string | undefined,
-  dayStart: number
-): Promise<string> {
-  const ip = remoteIp?.trim().toLowerCase() ?? "";
-  if (!IP_ADDRESS_PATTERN.test(ip)) rejectSponsorship();
-  return hmacSha256Hex(
-    secret,
-    `BaseStamp.IPBucket.v1\0${String(dayStart)}:${ip}`
+  return sha256Hex(
+    canonicalJson({
+      method: request.method,
+      params: params.slice(0, 3)
+    })
   );
 }
 
@@ -382,22 +361,29 @@ function requireProviderResult(
     method === "pm_getPaymasterStubData"
       ? ["paymasterAndData", "sponsor", "isFinal"]
       : ["paymasterAndData"];
+
+  if (!isRecord(value) || !hasOnlyKeys(value, allowedKeys)) {
+    providerUnavailable();
+  }
+
+  const paymasterAndData = value.paymasterAndData;
+  const isFinal = value.isFinal;
+
   if (
-    !isRecord(value) ||
-    !hasOnlyKeys(value, allowedKeys) ||
-    typeof value.paymasterAndData !== "string" ||
-    !HEX_DATA_PATTERN.test(value.paymasterAndData) ||
-    value.paymasterAndData.length < 42 ||
-    value.paymasterAndData.length > MAX_PAYMASTER_AND_DATA_BYTES * 2 + 2 ||
-    value.paymasterAndData.slice(0, 42).toLowerCase() ===
+    typeof paymasterAndData !== "string" ||
+    !HEX_DATA_PATTERN.test(paymasterAndData) ||
+    paymasterAndData.length < 42 ||
+    paymasterAndData.length > MAX_PAYMASTER_AND_DATA_BYTES * 2 + 2 ||
+    paymasterAndData.slice(0, 42).toLowerCase() ===
       ZERO_PAYMASTER_ADDRESS ||
-    (value.isFinal !== undefined && typeof value.isFinal !== "boolean")
+    (isFinal !== undefined && typeof isFinal !== "boolean")
   ) {
     providerUnavailable();
   }
+
   return {
-    paymasterAndData: value.paymasterAndData as Hex,
-    ...(value.isFinal === undefined ? {} : { isFinal: value.isFinal }),
+    paymasterAndData: paymasterAndData as Hex,
+    ...(typeof isFinal === "boolean" ? { isFinal } : {}),
     ...(value.sponsor === undefined
       ? {}
       : { sponsor: requireSponsorMetadata(value.sponsor) })
@@ -416,16 +402,45 @@ function readStoredResult(
   }
 }
 
+/**
+ * The browser talks ERC-7677 to this Worker. The Worker consumes its own
+ * claimId/grantToken context, then proxies the unsigned UserOperation to CDP.
+ *
+ * Preserve additive upstream context fields, but never forward BaseStamp's
+ * private grant token. Also remove fields ERC-7677 explicitly treats as absent
+ * from an unsigned UserOperation.
+ */
 function createProviderPayload(
   request: ValidatedPaymasterEnvelope
 ): Record<string, unknown> {
   const params = request.raw.params;
-  if (!Array.isArray(params) || params.length !== 4) rejectSponsorship();
+  if (
+    !Array.isArray(params) ||
+    params.length !== 4 ||
+    !isRecord(params[0]) ||
+    !isRecord(params[3])
+  ) {
+    rejectSponsorship();
+  }
+
+  const userOperation = { ...params[0] };
+  delete userOperation.signature;
+  delete userOperation.paymasterAndData;
+
+  const upstreamContext = { ...params[3] };
+  delete upstreamContext.claimId;
+  delete upstreamContext.grantToken;
+
   return {
     jsonrpc: "2.0",
     id: request.id,
     method: request.method,
-    params: [params[0], params[1], params[2], {}]
+    params: [
+      userOperation,
+      params[1],
+      params[2],
+      upstreamContext
+    ]
   };
 }
 
@@ -463,7 +478,11 @@ function parseProviderResponse(
   response: unknown,
   request: ValidatedPaymasterEnvelope
 ): PaymasterResult {
-  if (!isRecord(response) || response.jsonrpc !== "2.0" || response.id !== request.id) {
+  if (
+    !isRecord(response) ||
+    response.jsonrpc !== "2.0" ||
+    response.id !== request.id
+  ) {
     providerUnavailable();
   }
   if (Object.hasOwn(response, "error")) {
@@ -472,7 +491,10 @@ function parseProviderResponse(
       "Sponsorship provider rejected the request."
     );
   }
-  if (!hasOnlyKeys(response, ["jsonrpc", "id", "result"]) || !Object.hasOwn(response, "result")) {
+  if (
+    !hasOnlyKeys(response, ["jsonrpc", "id", "result"]) ||
+    !Object.hasOwn(response, "result")
+  ) {
     providerUnavailable();
   }
   return requireProviderResult(response.result, request.method);
@@ -698,13 +720,6 @@ function claimIsAuthorized(
   );
 }
 
-export function utcMonthStart(now: number): number {
-  const date = new Date(now * 1_000);
-  return Math.floor(
-    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1) / 1_000
-  );
-}
-
 export async function proxyPaymasterRequest(
   arguments_: ProxyPaymasterArguments
 ): Promise<ProxyPaymasterResponse> {
@@ -723,14 +738,13 @@ export async function proxyPaymasterRequest(
     }
     throw error;
   }
+
   const config = getPaymasterConfig(
     arguments_.env,
     request.chainId,
     builderCode
   );
   const now = arguments_.now ?? Math.floor(Date.now() / 1_000);
-  const dayStart = Math.floor(now / 86_400) * 86_400;
-  const monthStart = utcMonthStart(now);
   const repository =
     arguments_.repository ?? createD1SponsorProxyRepository(arguments_.env.DB);
   const grantTokenHash = await sha256Hex(request.context.grantToken);
@@ -740,75 +754,94 @@ export async function proxyPaymasterRequest(
     request.sender
   );
   const fingerprintHash = await requestFingerprint(request);
-  const claim = await repository.findClaim(request.context.claimId);
-  if (!claimIsAuthorized(claim, {
-    chainId: request.chainId,
-    grantTokenHash,
-    grantWalletKey,
-    now,
-    policyVersion: config.policyVersion
-  })) {
-    console.warn(JSON.stringify({
-      event: "sponsor_proxy_rejected",
-      stage: "grant_authorization",
-      method: request.method,
-      chainId: request.chainId
-    }));
-    rejectSponsorship();
-  }
+  const reservationDeadline =
+    Date.now() + RESERVATION_WAIT_TIMEOUT_MS;
 
-  if (
-    claim.status === "sponsored" &&
-    claim.requestFingerprintHash === fingerprintHash &&
-    claim.providerResponseJson !== null
-  ) {
-    return {
-      id: request.id,
-      result: readStoredResult(claim.providerResponseJson, request.method)
-    };
-  }
-  if (
-    request.method === "pm_getPaymasterStubData" &&
-    claim.status === "grant_issued" &&
-    claim.stubFingerprintHash === fingerprintHash &&
-    claim.stubResponseJson !== null
-  ) {
-    return {
-      id: request.id,
-      result: readStoredResult(claim.stubResponseJson, request.method)
-    };
-  }
-  if (claim.status !== "grant_issued") rejectSponsorship();
+  for (;;) {
+    const claim = await repository.findClaim(request.context.claimId);
 
-  if (arguments_.accountVerifier !== undefined) {
-    // Optional hook for tests or explicit deployments. Production deliberately
-    // leaves wallet/account internals to Base Account + the CDP Paymaster.
-    await arguments_.accountVerifier(request);
+    if (!claimIsAuthorized(claim, {
+      chainId: request.chainId,
+      grantTokenHash,
+      grantWalletKey,
+      now,
+      policyVersion: config.policyVersion
+    })) {
+      console.warn(JSON.stringify({
+        event: "sponsor_proxy_rejected",
+        stage: "grant_authorization",
+        method: request.method,
+        chainId: request.chainId
+      }));
+      rejectSponsorship();
+    }
+
+    if (
+      request.method === "pm_getPaymasterStubData" &&
+      (claim.status === "grant_issued" || claim.status === "sponsored") &&
+      claim.stubFingerprintHash === fingerprintHash &&
+      claim.stubResponseJson !== null
+    ) {
+      return {
+        id: request.id,
+        result: readStoredResult(
+          claim.stubResponseJson,
+          request.method
+        )
+      };
+    }
+
+    if (
+      claim.status !== "grant_issued" &&
+      claim.status !== "sponsored" &&
+      claim.status !== "requested"
+    ) {
+      console.warn(JSON.stringify({
+        event: "sponsor_proxy_rejected",
+        stage: "claim_state",
+        method: request.method,
+        chainId: request.chainId,
+        status: claim.status
+      }));
+      rejectSponsorship();
+    }
+
+    if (claim.status === "grant_issued" || claim.status === "sponsored") {
+      if (
+        claim.status === "grant_issued" &&
+        arguments_.accountVerifier !== undefined
+      ) {
+        // Optional hook for tests or explicit deployments. Production
+        // deliberately leaves wallet/account internals to Base Account + CDP.
+        await arguments_.accountVerifier(request);
+      }
+
+      const acquired = await repository.reserve({
+        claimId: request.context.claimId,
+        fingerprintHash,
+        grantTokenHash,
+        grantWalletKey,
+        method: request.method,
+        now,
+        policyVersion: config.policyVersion
+      });
+
+      if (acquired) {
+        break;
+      }
+    }
+
+    if (Date.now() >= reservationDeadline) {
+      console.warn(JSON.stringify({
+        event: "sponsor_proxy_wait_timeout",
+        method: request.method,
+        chainId: request.chainId
+      }));
+      return providerUnavailable();
+    }
+
+    await wait(RESERVATION_RETRY_DELAY_MS);
   }
-  const ipBucketKey = await createIpBucketKey(
-    config.ipBucketHmacSecret,
-    arguments_.remoteIp,
-    dayStart
-  );
-  const walletQuotaBypassed = await repository.isWalletQuotaBypassed({
-    action: SPONSOR_TURNSTILE_ACTION,
-    chainId: request.chainId,
-    now,
-    walletAddress: request.sender.toLowerCase()
-  });
-  await repository.reserve({
-    claimId: request.context.claimId,
-    dayStart,
-    fingerprintHash,
-    grantTokenHash,
-    grantWalletKey,
-    ipBucketKey,
-    method: request.method,
-    monthStart,
-    now,
-    policyVersion: config.policyVersion,
-    walletQuotaBypassed
-  });
 
   let providerResponse: unknown;
   try {
@@ -826,7 +859,10 @@ export async function proxyPaymasterRequest(
   try {
     result = parseProviderResponse(providerResponse, request);
   } catch (error) {
-    if (error instanceof ApiError && error.code === "sponsor_provider_rejected") {
+    if (
+      error instanceof ApiError &&
+      error.code === "sponsor_provider_rejected"
+    ) {
       await repository.deny(request.context.claimId, now);
     } else {
       await repository.release(request.context.claimId);
@@ -835,12 +871,20 @@ export async function proxyPaymasterRequest(
   }
 
   const responseJson = JSON.stringify(result);
-  if (new TextEncoder().encode(responseJson).byteLength > MAX_PROVIDER_RESPONSE_BYTES) {
+  if (
+    new TextEncoder().encode(responseJson).byteLength >
+    MAX_PROVIDER_RESPONSE_BYTES
+  ) {
     await repository.release(request.context.claimId);
     providerUnavailable();
   }
+
   const providerReferenceHash = await sha256Hex(responseJson);
-  if (request.method === "pm_getPaymasterData" || result.isFinal === true) {
+
+  if (
+    request.method === "pm_getPaymasterData" ||
+    result.isFinal === true
+  ) {
     await repository.completeSponsored({
       claimId: request.context.claimId,
       fingerprintHash,
@@ -855,6 +899,7 @@ export async function proxyPaymasterRequest(
       responseJson
     });
   }
+
   return { id: request.id, result };
 }
 
@@ -889,42 +934,9 @@ function mapClaim(row: SponsorClaimRow | null): SponsorClaim | null {
   };
 }
 
-function reservationRejected(): never {
-  return rejectSponsorship(
-    "sponsor_quota_exceeded",
-    "Sponsorship is not available for this request."
-  );
-}
-
 export function createD1SponsorProxyRepository(
   database: D1Database
 ): SponsorProxyRepository {
-  function quotaReleaseStatements(claimId: string): D1PreparedStatement[] {
-    return [
-      database.prepare(
-        "UPDATE rate_limit_buckets SET count = count - 1, " +
-          "updated_at = unixepoch() WHERE bucket_key = " +
-          "(SELECT request_ip_bucket_key FROM sponsor_claims " +
-          "WHERE claim_id = ? AND status = 'requested') AND count > 0"
-      ).bind(claimId),
-      database.prepare(
-        "UPDATE quota_counters SET count = count - 1, " +
-          "updated_at = unixepoch() WHERE counter_key = " +
-          "'sponsor:global:day:' || (SELECT request_day_start " +
-          "FROM sponsor_claims WHERE claim_id = ? AND status = 'requested') " +
-          "AND count > 0"
-      ).bind(claimId),
-      database.prepare(
-        "UPDATE quota_counters SET count = count - 1, " +
-          "updated_at = unixepoch() WHERE counter_key = " +
-          "'sponsor:wallet:month:' || (SELECT request_month_start " +
-          "FROM sponsor_claims WHERE claim_id = ? AND status = 'requested') " +
-          "|| ':' || (SELECT reserved_wallet_key FROM sponsor_claims " +
-          "WHERE claim_id = ? AND status = 'requested') AND count > 0"
-      ).bind(claimId, claimId)
-    ];
-  }
-
   return {
     async findClaim(claimId) {
       const row = await database.prepare(
@@ -937,145 +949,67 @@ export function createD1SponsorProxyRepository(
         .first<SponsorClaimRow>();
       return mapClaim(row);
     },
+
     async reserve(reservation) {
-      const globalCounterKey =
-        `sponsor:global:day:${String(reservation.dayStart)}`;
-      const walletCounterKey =
-        `sponsor:wallet:month:${String(reservation.monthStart)}:` +
-        reservation.grantWalletKey;
-      let results: D1Result[];
-      try {
-        results = await database.batch([
-          database.prepare(
-            "INSERT INTO rate_limit_buckets " +
-              "(bucket_key, window_start, count, expires_at, updated_at) " +
-              "VALUES (?, ?, 1, ?, ?) ON CONFLICT(bucket_key) DO UPDATE SET " +
-              "count = rate_limit_buckets.count + 1, " +
-              "updated_at = excluded.updated_at " +
-              "WHERE rate_limit_buckets.window_start = excluded.window_start"
-          ).bind(
-            reservation.ipBucketKey,
-            reservation.dayStart,
-            reservation.dayStart + 172_800,
-            reservation.now
-          ),
-          database.prepare(
-            "INSERT INTO quota_counters " +
-              "(counter_key, period_kind, period_start, count, updated_at) " +
-              "VALUES (?, 'day', ?, 1, ?) " +
-              "ON CONFLICT(counter_key) DO UPDATE SET " +
-              "count = quota_counters.count + 1, " +
-              "updated_at = excluded.updated_at " +
-              "WHERE quota_counters.period_kind = 'day' " +
-              "AND quota_counters.period_start = excluded.period_start"
-          ).bind(globalCounterKey, reservation.dayStart, reservation.now),
-          database.prepare(
-            "INSERT INTO quota_counters " +
-              "(counter_key, period_kind, period_start, count, updated_at) " +
-              "SELECT ?, 'month', ?, 1, ? WHERE ? = 0 " +
-              "ON CONFLICT(counter_key) DO UPDATE SET " +
-              "count = quota_counters.count + 1, " +
-              "updated_at = excluded.updated_at " +
-              "WHERE quota_counters.period_kind = 'month' " +
-              "AND quota_counters.period_start = excluded.period_start"
-          ).bind(
-            walletCounterKey,
-            reservation.monthStart,
-            reservation.now,
-            reservation.walletQuotaBypassed ? 1 : 0
-          ),
-          database.prepare(
-            "UPDATE sponsor_claims SET status = 'requested', " +
-              "reserved_wallet_key = CASE WHEN ? = 1 THEN NULL " +
-              "ELSE grant_wallet_key END, wallet_lifetime_bypassed = ?, " +
-              "request_ip_bucket_key = ?, " +
-              "request_day_start = ?, request_month_start = ?, " +
-              "request_method = ?, " +
-              "request_fingerprint_hash = ?, requested_at = ? " +
-              "WHERE claim_id = ? AND status = 'grant_issued' " +
-              "AND grant_token_hash = ? AND grant_wallet_key = ? " +
-              "AND policy_version = ? AND grant_expires_at > ?"
-          ).bind(
-            reservation.walletQuotaBypassed ? 1 : 0,
-            reservation.walletQuotaBypassed ? 1 : 0,
-            reservation.ipBucketKey,
-            reservation.dayStart,
-            reservation.monthStart,
-            reservation.method,
-            reservation.fingerprintHash,
-            reservation.now,
-            reservation.claimId,
-            reservation.grantTokenHash,
-            reservation.grantWalletKey,
-            reservation.policyVersion,
-            reservation.now
-          ),
-          database.prepare(
-            "INSERT INTO sponsor_reservation_assertions (claim_id, valid) " +
-              "VALUES (?, CASE WHEN EXISTS (" +
-              "SELECT 1 FROM sponsor_claims WHERE claim_id = ? " +
-              "AND status = 'requested' AND request_fingerprint_hash = ?) " +
-              "AND COALESCE((SELECT count <= 3 FROM rate_limit_buckets " +
-              "WHERE bucket_key = ? AND window_start = ?), 0) = 1 " +
-              "AND COALESCE((SELECT count <= 10 FROM quota_counters " +
-              "WHERE counter_key = ? AND period_kind = 'day' " +
-              "AND period_start = ?), 0) = 1 " +
-              "AND (? = 1 OR COALESCE((SELECT count <= 3 " +
-              "FROM quota_counters WHERE counter_key = ? " +
-              "AND period_kind = 'month' AND period_start = ?), 0) = 1) " +
-              "THEN 1 ELSE 0 END)"
-          ).bind(
-            reservation.claimId,
-            reservation.claimId,
-            reservation.fingerprintHash,
-            reservation.ipBucketKey,
-            reservation.dayStart,
-            globalCounterKey,
-            reservation.dayStart,
-            reservation.walletQuotaBypassed ? 1 : 0,
-            walletCounterKey,
-            reservation.monthStart
-          ),
-          database.prepare(
-            "DELETE FROM sponsor_reservation_assertions WHERE claim_id = ?"
-          ).bind(reservation.claimId)
-        ]);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "";
-        if (
-          message.includes("CHECK constraint failed") ||
-          message.includes("UNIQUE constraint failed")
-        ) {
-          reservationRejected();
-        }
-        throw error;
-      }
-      if (results[3]?.meta.changes !== 1) reservationRejected();
+      /*
+       * One wallet transaction can issue multiple ERC-7677 RPCs. This
+       * conditional update is the only runtime reservation: D1 serializes the
+       * write and exactly one request can move the claim to `requested`.
+       */
+      const acquired = await database.prepare(
+        "UPDATE sponsor_claims SET status = 'requested', " +
+          "reserved_wallet_key = NULL, wallet_lifetime_bypassed = 0, " +
+          "request_ip_bucket_key = NULL, request_day_start = NULL, " +
+          "request_month_start = NULL, request_method = ?, " +
+          "request_fingerprint_hash = ?, requested_at = ? " +
+          "WHERE claim_id = ? AND status IN ('grant_issued', 'sponsored') " +
+          "AND grant_token_hash = ? AND grant_wallet_key = ? " +
+          "AND policy_version = ? AND grant_expires_at > ?"
+      )
+        .bind(
+          reservation.method,
+          reservation.fingerprintHash,
+          reservation.now,
+          reservation.claimId,
+          reservation.grantTokenHash,
+          reservation.grantWalletKey,
+          reservation.policyVersion,
+          reservation.now
+        )
+        .run();
+      return acquired.meta.changes === 1;
     },
+
     async completeStub(completion) {
-      const results = await database.batch([
-        ...quotaReleaseStatements(completion.claimId),
-        database.prepare(
-          "UPDATE sponsor_claims SET status = 'grant_issued', " +
-            "reserved_wallet_key = NULL, stub_fingerprint_hash = ?, " +
-            "stub_response_json = ?, request_ip_bucket_key = NULL, " +
-            "request_day_start = NULL, request_month_start = NULL, " +
-            "request_method = NULL, " +
-            "request_fingerprint_hash = NULL, requested_at = NULL " +
-            "WHERE claim_id = ? AND status = 'requested'"
-        ).bind(
+      const result = await database.prepare(
+        "UPDATE sponsor_claims SET status = CASE " +
+          "WHEN sponsored_at IS NULL THEN 'grant_issued' " +
+          "ELSE 'sponsored' END, " +
+          "reserved_wallet_key = NULL, stub_fingerprint_hash = ?, " +
+          "stub_response_json = ?, request_ip_bucket_key = NULL, " +
+          "request_day_start = NULL, request_month_start = NULL, " +
+          "request_method = NULL, request_fingerprint_hash = NULL, " +
+          "requested_at = NULL, wallet_lifetime_bypassed = 0 " +
+          "WHERE claim_id = ? AND status = 'requested'"
+      )
+        .bind(
           completion.fingerprintHash,
           completion.responseJson,
           completion.claimId
         )
-      ]);
-      const result = results[3];
-      if (result.meta.changes !== 1) throw new Error("Sponsor stub state conflict.");
+        .run();
+      if (result.meta.changes !== 1) {
+        throw new Error("Sponsor stub state conflict.");
+      }
     },
+
     async completeSponsored(completion) {
       const result = await database.prepare(
         "UPDATE sponsor_claims SET status = 'sponsored', " +
           "wallet_sponsor_key = NULL, reserved_wallet_key = NULL, " +
+          "request_ip_bucket_key = NULL, request_day_start = NULL, " +
+          "request_month_start = NULL, request_method = NULL, " +
+          "requested_at = NULL, wallet_lifetime_bypassed = 0, " +
           "provider_reference_hash = ?, provider_response_json = ?, " +
           "request_fingerprint_hash = ?, sponsored_at = ?, terminal_at = ? " +
           "WHERE claim_id = ? AND status = 'requested'"
@@ -1093,44 +1027,32 @@ export function createD1SponsorProxyRepository(
         throw new Error("Sponsor completion state conflict.");
       }
     },
+
     async release(claimId) {
-      await database.batch([
-        ...quotaReleaseStatements(claimId),
-        database.prepare(
-          "UPDATE sponsor_claims SET status = 'grant_issued', " +
-            "reserved_wallet_key = NULL, request_ip_bucket_key = NULL, " +
-            "request_day_start = NULL, request_month_start = NULL, " +
-            "request_method = NULL, " +
-            "request_fingerprint_hash = NULL, requested_at = NULL, " +
-            "wallet_lifetime_bypassed = 0 " +
-            "WHERE claim_id = ? AND status = 'requested'"
-        ).bind(claimId)
-      ]);
+      await database.prepare(
+        "UPDATE sponsor_claims SET status = CASE " +
+          "WHEN sponsored_at IS NULL THEN 'grant_issued' " +
+          "ELSE 'sponsored' END, " +
+          "reserved_wallet_key = NULL, request_ip_bucket_key = NULL, " +
+          "request_day_start = NULL, request_month_start = NULL, " +
+          "request_method = NULL, request_fingerprint_hash = NULL, " +
+          "requested_at = NULL, wallet_lifetime_bypassed = 0 " +
+          "WHERE claim_id = ? AND status = 'requested'"
+      ).bind(claimId).run();
     },
+
     async deny(claimId, now) {
-      await database.batch([
-        ...quotaReleaseStatements(claimId),
-        database.prepare(
-          "UPDATE sponsor_claims SET status = 'denied', " +
-            "reserved_wallet_key = NULL, terminal_at = ? " +
-            "WHERE claim_id = ? AND status = 'requested'"
-        ).bind(now, claimId)
-      ]);
-    },
-    async isWalletQuotaBypassed(arguments_) {
-      const row = await database.prepare(
-        "SELECT 1 AS allowed FROM sponsor_wallet_allowlist " +
-          "WHERE wallet_address = ? AND chain_id = ? AND action = ? " +
-          "AND expires_at > ?"
-      )
-        .bind(
-          arguments_.walletAddress,
-          arguments_.chainId,
-          arguments_.action,
-          arguments_.now
-        )
-        .first<{ allowed: number }>();
-      return row?.allowed === 1;
+      await database.prepare(
+        "UPDATE sponsor_claims SET status = CASE " +
+          "WHEN sponsored_at IS NULL THEN 'denied' ELSE 'sponsored' END, " +
+          "reserved_wallet_key = NULL, request_ip_bucket_key = NULL, " +
+          "request_day_start = NULL, request_month_start = NULL, " +
+          "request_method = NULL, request_fingerprint_hash = NULL, " +
+          "requested_at = NULL, wallet_lifetime_bypassed = 0, " +
+          "terminal_at = CASE WHEN sponsored_at IS NULL THEN ? " +
+          "ELSE terminal_at END " +
+          "WHERE claim_id = ? AND status = 'requested'"
+      ).bind(now, claimId).run();
     }
   };
 }

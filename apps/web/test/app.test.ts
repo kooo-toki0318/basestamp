@@ -272,10 +272,9 @@ describe("Core Worker surface", () => {
     };
     let proxyCalled = false;
     const response = await createCoreApp({
-      proxyPaymaster: (_env, request, remoteIp) => {
+      proxyPaymaster: (_env, request) => {
         proxyCalled = true;
         expect(request).toEqual(body);
-        expect(remoteIp).toBe("203.0.113.10");
         return Promise.resolve({
           id: 9,
           result: { paymasterAndData: "0x1234" }

@@ -118,8 +118,7 @@ type SponsorGrantIssuer = (
 
 type SponsorPaymasterProxy = (
   env: Bindings,
-  request: unknown,
-  remoteIp: string | undefined
+  request: unknown
 ) => Promise<ProxyPaymasterResponse>;
 
 type Dependencies = {
@@ -535,8 +534,7 @@ export function createCoreApp(dependencies: Dependencies = {}) {
       }));
   const proxySponsorPaymaster: SponsorPaymasterProxy =
     dependencies.proxyPaymaster ??
-    ((env, request, remoteIp) =>
-      proxyPaymasterRequest({ env, remoteIp, request }));
+    ((env, request) => proxyPaymasterRequest({ env, request }));
   const app = new Hono<{ Bindings: Bindings }>();
 
   app.use("/api/sponsor", async (context, next) => {
@@ -937,8 +935,7 @@ app.post("/api/sponsor", async (context) => {
 
   const response = await proxySponsorPaymaster(
     context.env,
-    paymasterRequest,
-    context.req.header("CF-Connecting-IP")
+    paymasterRequest
   );
 
   return context.json({
