@@ -880,26 +880,7 @@ app.post("/api/sponsor", async (context) => {
       : undefined;
 
     if (params?.length === 4) {
-      const suppliedUserOperation = params[0];
       const suppliedContext = params[3];
-
-      let normalizedUserOperation: unknown = suppliedUserOperation;
-      if (
-        typeof suppliedUserOperation === "object" &&
-        suppliedUserOperation !== null &&
-        !Array.isArray(suppliedUserOperation)
-      ) {
-        const userOperation = {
-          ...(suppliedUserOperation as Record<string, unknown>)
-        };
-
-        // ERC-7677 paymaster methods operate on an unsigned UserOperation.
-        // Wallet tooling can still carry prepared fields into the RPC object,
-        // so remove them before strict policy validation/provider forwarding.
-        delete userOperation.signature;
-        delete userOperation.paymasterAndData;
-        normalizedUserOperation = userOperation;
-      }
 
       const hasGrantContext =
         typeof suppliedContext === "object" &&
@@ -908,30 +889,26 @@ app.post("/api/sponsor", async (context) => {
         typeof Reflect.get(suppliedContext, "claimId") === "string" &&
         typeof Reflect.get(suppliedContext, "grantToken") === "string";
 
-      let normalizedContext: unknown = suppliedContext;
-
       if (!hasGrantContext) {
         const requestUrl = new URL(context.req.url);
         const claimId = requestUrl.searchParams.get("claimId");
         const grantToken = requestUrl.searchParams.get("grantToken");
 
         if (claimId !== null && grantToken !== null) {
-          normalizedContext = {
-            claimId,
-            grantToken
+          paymasterRequest = {
+            ...request,
+            params: [
+              params[0],
+              params[1],
+              params[2],
+              {
+                claimId,
+                grantToken
+              }
+            ]
           };
         }
       }
-
-      paymasterRequest = {
-        ...request,
-        params: [
-          normalizedUserOperation,
-          params[1],
-          params[2],
-          normalizedContext
-        ]
-      };
     }
   }
 

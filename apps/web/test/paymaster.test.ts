@@ -24,6 +24,7 @@ import type { Bindings } from "../worker/types";
 
 const NOW = 1_786_406_400;
 const BUILDER_CODE = "basestamp";
+const BUILDER_SUFFIX = Attribution.toDataSuffix({ codes: [BUILDER_CODE] });
 const CLAIM_ID = "65e41858-cd5e-4c75-b9e4-9a772d748949";
 const GRANT_TOKEN = "g".repeat(43);
 const PAYMASTER_AND_DATA = `0x${"11".repeat(20)}`;
@@ -48,15 +49,16 @@ function bytes32(byte: string): Hex {
   return `0x${byte.repeat(32)}`;
 }
 
-function createRequest(method: "pm_getPaymasterData" | "pm_getPaymasterStubData" = "pm_getPaymasterData") {
-  const registryCall = concatHex([
-    encodeFunctionData({
-      abi: registryAbi,
-      functionName: "createStamp",
-      args: [bytes32("11"), bytes32("22"), bytes32("33")]
-    }),
-    Attribution.toDataSuffix({ codes: [BUILDER_CODE] })
-  ]);
+function createRequest(
+  method: "pm_getPaymasterData" | "pm_getPaymasterStubData" =
+    "pm_getPaymasterData"
+) {
+  const registryCall = encodeFunctionData({
+    abi: registryAbi,
+    functionName: "createStamp",
+    args: [bytes32("11"), bytes32("22"), bytes32("33")]
+  });
+
   return {
     jsonrpc: "2.0",
     id: 7,
@@ -66,17 +68,28 @@ function createRequest(method: "pm_getPaymasterData" | "pm_getPaymasterStubData"
         sender: SENDER,
         nonce: "0x0",
         initCode: "0x",
-        callData: encodeFunctionData({
-          abi: baseAccountAbi,
-          functionName: "execute",
-          args: [BASE_SEPOLIA_DEPLOYMENT.registryAddress, 0n, registryCall]
-        }),
+        callData: concatHex([
+          encodeFunctionData({
+            abi: baseAccountAbi,
+            functionName: "execute",
+            args: [
+              BASE_SEPOLIA_DEPLOYMENT.registryAddress,
+              0n,
+              registryCall
+            ]
+          }),
+          BUILDER_SUFFIX
+        ]),
         callGasLimit: method === "pm_getPaymasterData" ? "0x186a0" : "0x0",
         verificationGasLimit:
           method === "pm_getPaymasterData" ? "0x30d40" : "0x0",
-        preVerificationGas: method === "pm_getPaymasterData" ? "0xc350" : "0x0",
+        preVerificationGas:
+          method === "pm_getPaymasterData" ? "0xc350" : "0x0",
         ...(method === "pm_getPaymasterData"
-          ? { maxFeePerGas: "0x3b9aca00", maxPriorityFeePerGas: "0xf4240" }
+          ? {
+              maxFeePerGas: "0x3b9aca00",
+              maxPriorityFeePerGas: "0xf4240"
+            }
           : {})
       },
       BASE_ACCOUNT_ENTRY_POINT,
@@ -86,13 +99,19 @@ function createRequest(method: "pm_getPaymasterData" | "pm_getPaymasterStubData"
   };
 }
 
-async function createClaim(overrides: Partial<SponsorClaim> = {}): Promise<SponsorClaim> {
+async function createClaim(
+  overrides: Partial<SponsorClaim> = {}
+): Promise<SponsorClaim> {
   return {
     action: "sponsor_stamp",
     chainId: 84532,
     grantExpiresAt: NOW + 300,
     grantTokenHash: await sha256Hex(GRANT_TOKEN),
-    grantWalletKey: await createWalletSponsorKey(SPONSOR_SECRET, 84532, SENDER),
+    grantWalletKey: await createWalletSponsorKey(
+      SPONSOR_SECRET,
+      84532,
+      SENDER
+    ),
     policyVersion: 2,
     providerResponseJson: null,
     requestFingerprintHash: null,
@@ -415,7 +434,9 @@ describe("Paymaster proxy", () => {
   });
 
   it("rejects a bad grant before account verification or provider forwarding", async () => {
-    const memory = createRepository(await createClaim({ grantTokenHash: "0".repeat(64) }));
+    const memory = createRepository(
+      await createClaim({ grantTokenHash: "0".repeat(64) })
+    );
     let externalCalls = 0;
     await expect(proxyPaymasterRequest({
       accountVerifier: () => {

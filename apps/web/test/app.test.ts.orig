@@ -302,60 +302,6 @@ describe("Core Worker surface", () => {
     expect(proxyCalled).toBe(true);
   });
 
-  it("normalizes wallet-only paymaster fields before the sponsor proxy", async () => {
-    const claimId = "65e41858-cd5e-4c75-b9e4-9a772d748949";
-    const grantToken = "g".repeat(43);
-    const body = {
-      jsonrpc: "2.0",
-      id: 10,
-      method: "pm_getPaymasterStubData",
-      params: [
-        {
-          sender: "0x1111111111111111111111111111111111111111",
-          callData: "0x1234",
-          signature: "0xabcd",
-          paymasterAndData: "0xef01"
-        },
-        "entrypoint",
-        "0x2105",
-        {}
-      ]
-    };
-
-    let proxiedRequest: unknown;
-    const response = await createCoreApp({
-      proxyPaymaster: (_env, request) => {
-        proxiedRequest = request;
-        return Promise.resolve({
-          id: 10,
-          result: { paymasterAndData: "0x1234" }
-        });
-      }
-    }).request(
-      `/api/sponsor?claimId=${claimId}&grantToken=${grantToken}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body)
-      },
-      emptyEnv
-    );
-
-    expect(response.status).toBe(200);
-    expect(proxiedRequest).toEqual({
-      ...body,
-      params: [
-        {
-          sender: "0x1111111111111111111111111111111111111111",
-          callData: "0x1234"
-        },
-        "entrypoint",
-        "0x2105",
-        { claimId, grantToken }
-      ]
-    });
-  });
-
   it("allows the Base Account popup to preflight the Paymaster proxy", async () => {
     const response = await createCoreApp().request(
       "/api/sponsor",

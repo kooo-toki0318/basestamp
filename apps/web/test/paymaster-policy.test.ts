@@ -17,6 +17,7 @@ import { registryAbi } from "../src/lib/registry";
 import { validatePaymasterRequest } from "../worker/paymaster-policy";
 
 const BUILDER_CODE = "basestamp";
+const BUILDER_SUFFIX = Attribution.toDataSuffix({ codes: [BUILDER_CODE] });
 const SENDER = "0x1111111111111111111111111111111111111111" as Address;
 const OTHER_TARGET = "0x2222222222222222222222222222222222222222" as Address;
 
@@ -28,25 +29,23 @@ const BYTES_32_A = repeatedByteHex("11");
 const BYTES_32_B = repeatedByteHex("22");
 const BYTES_32_C = repeatedByteHex("33");
 
-function createRegistryCall(
-  suffix = Attribution.toDataSuffix({ codes: [BUILDER_CODE] })
-): Hex {
-  return concatHex([
-    encodeFunctionData({
-      abi: registryAbi,
-      functionName: "createStamp",
-      args: [BYTES_32_A, BYTES_32_B, BYTES_32_C]
-    }),
-    suffix
-  ]);
+function createRegistryCall(): Hex {
+  return encodeFunctionData({
+    abi: registryAbi,
+    functionName: "createStamp",
+    args: [BYTES_32_A, BYTES_32_B, BYTES_32_C]
+  });
 }
 
-function createAccountCall(arguments_: {
-  data?: Hex;
-  target?: Address;
-  value?: bigint;
-} = {}): Hex {
-  return encodeFunctionData({
+function createAccountCall(
+  arguments_: {
+    data?: Hex;
+    suffix?: Hex | null;
+    target?: Address;
+    value?: bigint;
+  } = {}
+): Hex {
+  const accountCall = encodeFunctionData({
     abi: baseAccountAbi,
     functionName: "execute",
     args: [
@@ -55,9 +54,21 @@ function createAccountCall(arguments_: {
       arguments_.data ?? createRegistryCall()
     ]
   });
+
+  if (arguments_.suffix === null) {
+    return accountCall;
+  }
+
+  return concatHex([
+    accountCall,
+    arguments_.suffix ?? BUILDER_SUFFIX
+  ]);
 }
 
-function createRequest(method: "pm_getPaymasterData" | "pm_getPaymasterStubData" = "pm_getPaymasterData") {
+function createRequest(
+  method: "pm_getPaymasterData" | "pm_getPaymasterStubData" =
+    "pm_getPaymasterData"
+) {
   return {
     jsonrpc: "2.0",
     id: 1,
@@ -71,9 +82,13 @@ function createRequest(method: "pm_getPaymasterData" | "pm_getPaymasterStubData"
         callGasLimit: method === "pm_getPaymasterData" ? "0x186a0" : "0x0",
         verificationGasLimit:
           method === "pm_getPaymasterData" ? "0x30d40" : "0x0",
-        preVerificationGas: method === "pm_getPaymasterData" ? "0xc350" : "0x0",
+        preVerificationGas:
+          method === "pm_getPaymasterData" ? "0xc350" : "0x0",
         ...(method === "pm_getPaymasterData"
-          ? { maxFeePerGas: "0x3b9aca00", maxPriorityFeePerGas: "0xf4240" }
+          ? {
+              maxFeePerGas: "0x3b9aca00",
+              maxPriorityFeePerGas: "0xf4240"
+            }
           : {})
       },
       BASE_ACCOUNT_ENTRY_POINT,
@@ -155,77 +170,81 @@ describe("Paymaster deep validation", () => {
     expectRejected(request);
   });
 
-it("accepts exactly one batch Registry execution", () => {
-  const request = createRequest();
-  const userOperation = request.params[0] as Record<string, unknown>;
+  it("accepts exactly one batch Registry execution", () => {
+    const request = createRequest();
+    const userOperation = request.params[0] as Record<string, unknown>;
 
-  userOperation.callData = encodeFunctionData({
-    abi: baseAccountAbi,
-    functionName: "executeBatch",
-    args: [
-      [
-        {
-          target: BASE_SEPOLIA_DEPLOYMENT.registryAddress,
-          value: 0n,
-          data: createRegistryCall()
-        }
-      ]
-    ]
+    userOperation.callData = concatHex([
+      encodeFunctionData({
+        abi: baseAccountAbi,
+        functionName: "executeBatch",
+        args: [
+          [
+            {
+              target: BASE_SEPOLIA_DEPLOYMENT.registryAddress,
+              value: 0n,
+              data: createRegistryCall()
+            }
+          ]
+        ]
+      }),
+      BUILDER_SUFFIX
+    ]);
+
+    const parsed = validatePaymasterRequest(request, BUILDER_CODE);
+
+    expect(parsed.call).toEqual({
+      contentCommitment: BYTES_32_A,
+      metadataHash: BYTES_32_B,
+      stampNonce: BYTES_32_C
+    });
   });
 
-  const parsed = validatePaymasterRequest(request, BUILDER_CODE);
+  it("rejects batch execution with multiple calls", () => {
+    const request = createRequest();
+    const userOperation = request.params[0] as Record<string, unknown>;
 
-  expect(parsed.call).toEqual({
-    contentCommitment: BYTES_32_A,
-    metadataHash: BYTES_32_B,
-    stampNonce: BYTES_32_C
-  });
-});
+    userOperation.callData = concatHex([
+      encodeFunctionData({
+        abi: baseAccountAbi,
+        functionName: "executeBatch",
+        args: [
+          [
+            {
+              target: BASE_SEPOLIA_DEPLOYMENT.registryAddress,
+              value: 0n,
+              data: createRegistryCall()
+            },
+            {
+              target: BASE_SEPOLIA_DEPLOYMENT.registryAddress,
+              value: 0n,
+              data: createRegistryCall()
+            }
+          ]
+        ]
+      }),
+      BUILDER_SUFFIX
+    ]);
 
-it("rejects batch execution with multiple calls", () => {
-  const request = createRequest();
-  const userOperation = request.params[0] as Record<string, unknown>;
-
-  userOperation.callData = encodeFunctionData({
-    abi: baseAccountAbi,
-    functionName: "executeBatch",
-    args: [
-      [
-        {
-          target: BASE_SEPOLIA_DEPLOYMENT.registryAddress,
-          value: 0n,
-          data: createRegistryCall()
-        },
-        {
-          target: BASE_SEPOLIA_DEPLOYMENT.registryAddress,
-          value: 0n,
-          data: createRegistryCall()
-        }
-      ]
-    ]
+    expectRejected(request);
   });
 
-  expectRejected(request);
-});
   it.each([
     ["wrong target", createAccountCall({ target: OTHER_TARGET })],
     ["nonzero value", createAccountCall({ value: 1n })],
-    ["missing Builder suffix", createAccountCall({
-      data: encodeFunctionData({
-        abi: registryAbi,
-        functionName: "createStamp",
-        args: [BYTES_32_A, BYTES_32_B, BYTES_32_C]
+    ["missing Builder suffix", createAccountCall({ suffix: null })],
+    [
+      "duplicate Builder suffix",
+      createAccountCall({
+        suffix: concatHex([BUILDER_SUFFIX, BUILDER_SUFFIX])
       })
-    })],
-    ["duplicate Builder suffix", createAccountCall({
-      data: concatHex([
-        createRegistryCall(),
-        Attribution.toDataSuffix({ codes: [BUILDER_CODE] })
-      ])
-    })],
-    ["different Builder suffix", createAccountCall({
-      data: createRegistryCall(Attribution.toDataSuffix({ codes: ["other"] }))
-    })]
+    ],
+    [
+      "different Builder suffix",
+      createAccountCall({
+        suffix: Attribution.toDataSuffix({ codes: ["other"] })
+      })
+    ]
   ])("rejects %s", (_label, callData) => {
     const request = createRequest();
     (request.params[0] as Record<string, unknown>).callData = callData;
@@ -235,14 +254,11 @@ it("rejects batch execution with multiple calls", () => {
   it("rejects zero Registry arguments", () => {
     const zero = repeatedByteHex("00");
     const request = createRequest();
-    const registryCall = concatHex([
-      encodeFunctionData({
-        abi: registryAbi,
-        functionName: "createStamp",
-        args: [zero, BYTES_32_B, BYTES_32_C]
-      }),
-      Attribution.toDataSuffix({ codes: [BUILDER_CODE] })
-    ]);
+    const registryCall = encodeFunctionData({
+      abi: registryAbi,
+      functionName: "createStamp",
+      args: [zero, BYTES_32_B, BYTES_32_C]
+    });
     (request.params[0] as Record<string, unknown>).callData =
       createAccountCall({ data: registryCall });
     expectRejected(request);

@@ -23,6 +23,7 @@ import { createWalletSponsorKey } from "../worker/sponsor";
 import type { Bindings } from "../worker/types";
 
 const BUILDER_CODE = "basestamp";
+const BUILDER_SUFFIX = Attribution.toDataSuffix({ codes: [BUILDER_CODE] });
 const CLAIM_ID = "65e41858-cd5e-4c75-b9e4-9a772d748949";
 const GRANT_TOKEN = "g".repeat(43);
 const SENDER =
@@ -36,14 +37,11 @@ function bytes32(byte: string): Hex {
 }
 
 function mainnetRequest() {
-  const registryCall = concatHex([
-    encodeFunctionData({
-      abi: registryAbi,
-      functionName: "createStamp",
-      args: [bytes32("11"), bytes32("22"), bytes32("33")]
-    }),
-    Attribution.toDataSuffix({ codes: [BUILDER_CODE] })
-  ]);
+  const registryCall = encodeFunctionData({
+    abi: registryAbi,
+    functionName: "createStamp",
+    args: [bytes32("11"), bytes32("22"), bytes32("33")]
+  });
 
   return {
     jsonrpc: "2.0",
@@ -54,15 +52,18 @@ function mainnetRequest() {
         sender: SENDER,
         nonce: "0x0",
         initCode: "0x",
-        callData: encodeFunctionData({
-          abi: baseAccountAbi,
-          functionName: "execute",
-          args: [
-            BASE_MAINNET_DEPLOYMENT.registryAddress,
-            0n,
-            registryCall
-          ]
-        }),
+        callData: concatHex([
+          encodeFunctionData({
+            abi: baseAccountAbi,
+            functionName: "execute",
+            args: [
+              BASE_MAINNET_DEPLOYMENT.registryAddress,
+              0n,
+              registryCall
+            ]
+          }),
+          BUILDER_SUFFIX
+        ]),
         callGasLimit: "0x186a0",
         verificationGasLimit: "0x30d40",
         preVerificationGas: "0xc350",
