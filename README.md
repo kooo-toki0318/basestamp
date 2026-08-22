@@ -95,8 +95,8 @@ unavailable; BaseStamp does not silently submit a paid transaction.
 
 ## Current release
 
-Milestones **3b (Mainnet Core MVP)** and the repository/production portion of
-**3c (Base Builder publication)** are complete. The public app defaults to Base
+Milestones **3b (Mainnet Core MVP)** and **3c (Standard Web App release)**
+are complete. The public app defaults to Base
 Mainnet, and the same chain-selected create, confirmation, package, handoff, and
 verification paths continue to support Base Sepolia.
 
