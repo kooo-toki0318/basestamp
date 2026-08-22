@@ -356,7 +356,9 @@ export function HandoffPage({
   return (
     <section className="shell workspace handoff-page">
       <div className="workspace-heading">
-        <p className="eyebrow">{t("handoffPage.eyebrow")}</p>
+        <p className="eyebrow">
+          {t("handoffPage.eyebrow", { network: routeNetwork.name })}
+        </p>
         <h1>{t("handoffPage.title")}</h1>
         <p className="lede">{t("handoffPage.lede")}</p>
       </div>
@@ -503,7 +505,11 @@ export function HandoffPage({
         <section className="panel handoff-receipt-card">
           <span className="step-label">{t("handoffPage.receiptLabel")}</span>
           <h2>{t("handoffPage.receiptTitle")}</h2>
-          <p>{t("handoffPage.receiptIntro")}</p>
+          <p>
+            {t("handoffPage.receiptIntro", {
+              network: routeNetwork.name
+            })}
+          </p>
 
           {selectedChainId !== chainId ? (
             <button

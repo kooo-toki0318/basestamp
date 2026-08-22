@@ -42,8 +42,9 @@ Onchain state remains the canonical source for stamps.
 
 ## Out of scope
 
-x402 and Mainnet writes remain disabled. Base Sepolia sponsorship is enabled
-only for release validation and includes Turnstile, sponsor grants, per-claim
-concurrency control, hourly cleanup, and retention health. A successful wallet transaction
+x402 remains disabled. Base Mainnet and Base Sepolia recording and sponsorship
+are enabled behind reviewed build, Worker, and provider-policy gates.
+Sponsorship includes Turnstile, wallet/chain-bound grants, per-claim concurrency
+control, hourly cleanup, and retention health. A successful wallet transaction
 alone does not prove that BaseStamp's Paymaster was used; release evidence must
 also show the matching D1 claim reached its sponsored state.

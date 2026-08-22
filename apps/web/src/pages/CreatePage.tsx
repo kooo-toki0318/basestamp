@@ -479,7 +479,11 @@ export function CreatePage({
 
   async function submit(): Promise<void> {
     if (!registryAvailable && pendingConfirmation === undefined) {
-      setStatus(t("create.status.mainnetUnavailable"));
+      setStatus(
+        t("create.status.mainnetUnavailable", {
+          network: selectedNetwork.name
+        })
+      );
       return;
     }
     if (
@@ -657,7 +661,11 @@ export function CreatePage({
       downloadPackage(nextPackage);
       setPendingConfirmation(undefined);
       resetSponsorAttempt();
-      setStatus(t("create.status.recorded"));
+      setStatus(
+        t("create.status.recorded", {
+          network: getBaseNetwork(confirmationChainId).name
+        })
+      );
     } catch (error) {
       if (activeConfirmation !== undefined) {
         setStatus(
@@ -826,7 +834,9 @@ export function CreatePage({
       </aside>
 
       {!registryAvailable && (
-        <div className="notice">{t("create.mainnetNotice")}</div>
+        <div className="notice">
+          {t("create.mainnetNotice", { network: selectedNetwork.name })}
+        </div>
       )}
 
       <div
@@ -938,7 +948,11 @@ export function CreatePage({
           {package_ === undefined ? (
             <>
               {!registryAvailable && (
-                <p className="muted">{t("create.mainnetUnavailable")}</p>
+                <p className="muted">
+                  {t("create.mainnetUnavailable", {
+                    network: selectedNetwork.name
+                  })}
+                </p>
               )}
               {registryAvailable &&
                 pendingConfirmation === undefined &&
@@ -1164,7 +1178,9 @@ export function CreatePage({
                           : "create.feeNotice",
                         { network: selectedNetwork.name }
                       )
-                  : t("create.noMainnetTransaction")}
+                  : t("create.noMainnetTransaction", {
+                      network: selectedNetwork.name
+                    })}
               </p>
             </>
           ) : (
@@ -1175,7 +1191,11 @@ export function CreatePage({
               </div>
               <p className="muted">{t("create.confirmedBody")}</p>
               <div className="result-transaction">
-                <span>{t("create.transactionHash")}</span>
+                <span>
+                  {t("create.transactionHash", {
+                    network: getBaseNetwork(package_.chainId).name
+                  })}
+                </span>
                 <a
                   href={
                     getDeployment(package_.chainId).explorerUrl +

@@ -31,7 +31,7 @@ describe("Core Worker surface", () => {
     await expect(response.json()).resolves.toEqual({
       ok: true,
       service: "basestamp-core",
-      milestone: "3b-preparation"
+      milestone: "3c-mainnet-release"
     });
     expect(response.headers.get("cache-control")).toBe("no-store");
     expect(response.headers.get("x-content-type-options")).toBe("nosniff");

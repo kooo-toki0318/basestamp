@@ -11,7 +11,7 @@ import {
   MAX_FILE_SIZE_BYTES
 } from "../lib/crypto";
 import { getDeployment } from "../lib/deployment";
-import type { SupportedChainId } from "../lib/networks";
+import { getBaseNetwork, type SupportedChainId } from "../lib/networks";
 import {
   readRegistryStamp,
   verifyPackageOnchain
@@ -44,6 +44,7 @@ export function StampPage({
 }: StampPageProperties) {
   const { locale, t } = useI18n();
   const deployment = getDeployment(chainId);
+  const routeNetwork = getBaseNetwork(chainId);
   const [stamp, setStamp] = useState<RegistryStamp>();
   const [package_, setPackage] = useState<VerificationPackage>();
   const [file, setFile] = useState<File>();
@@ -208,9 +209,13 @@ export function StampPage({
   return (
     <section className="shell workspace">
       <div className="workspace-heading">
-        <p className="eyebrow">{t("stamp.eyebrow")}</p>
+        <p className="eyebrow">
+          {t("stamp.eyebrow", { network: routeNetwork.name })}
+        </p>
         <h1>{t("stamp.title")}</h1>
-        <p className="lede">{t("stamp.lede")}</p>
+        <p className="lede">
+          {t("stamp.lede", { network: routeNetwork.name })}
+        </p>
       </div>
 
       <HandoffStory compact activeRole="verify" />

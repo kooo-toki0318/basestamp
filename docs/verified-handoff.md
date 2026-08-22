@@ -8,13 +8,14 @@ Verified Handoff is BaseStamp's private sender-to-recipient path:
 
 The fragment is not part of an HTTP request. BaseStamp captures the canonical
 32-byte key before React starts, removes it from the address bar, and keeps it
-only in browser memory. The browser reads the fixed Base Sepolia Registry and
-recalculates the file commitment in a dedicated worker. A mismatch never
+only in browser memory. The route selects one reviewed Base Mainnet or Base
+Sepolia deployment; the browser reads that fixed Registry and recalculates the
+file commitment in a dedicated worker. A mismatch never
 renders the Receipt-signing action.
 
 ## Optional Receipt
 
-After a local match, an authenticated Base Sepolia wallet can request a
+After a local match, a wallet authenticated on the record's Base network can request a
 ten-minute, one-time EIP-712 challenge. The Worker binds it to the session
 wallet, chain, stamp, current Registry commitment, and fixed statement:
 
@@ -60,5 +61,6 @@ signature simulation. It does not execute an arbitrary counterfactual factory.
 
 Receipt input is limited to 64 KiB and rejects unknown fields, duplicate keys,
 prototype keys, noncanonical numbers, unsupported versions, and altered
-EIP-712 domain or type definitions. Revalidation uses the fixed Base Sepolia
-RPC and Registry; the Receipt's URL is never fetched.
+EIP-712 domain or type definitions. Revalidation uses the fixed reviewed RPC
+and Registry selected by the Receipt's supported chain ID; arbitrary package or
+Receipt URLs are never fetched.

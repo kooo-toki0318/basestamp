@@ -28,8 +28,8 @@ not log request bodies, wallet signatures, session tokens, cookies, raw IP
 addresses, secrets, or authorization headers. Runtime configuration fixes the
 allowed SIWE domain, origin, and Base chain; request headers do not choose them.
 The Worker reads the Registry independently, binds each handoff challenge to the
-authenticated wallet and Base Sepolia session, and never claims to have observed
-the browser-local file match.
+authenticated wallet and selected supported Base-chain session, and never
+claims to have observed the browser-local file match.
 Persisted invocation logs are disabled. Application error paths emit only a
 fixed event name and, for HTTP errors, the method and bounded route class;
 scheduled-cleanup failures emit only a fixed event. BaseStamp does not put
@@ -93,12 +93,12 @@ its two-hour service window.
 
 ## External systems
 
-The browser uses a fixed Base Sepolia RPC for signature verification, Registry
-reads and user-approved writes, and receipt, block, and event checks. Request and
-verification-package values cannot select a different RPC or Registry address.
-The CDP URL remains Worker-only, and the Worker removes its internal grant
-token before forwarding a validated request. The browser-facing Paymaster
-route allows cross-origin requests only from exact configured Base Account
-popup origins and does not allow cookies. Base Sepolia sponsorship is enabled
-for release validation; x402 and Mainnet write flags remain disabled until
-their release gates pass.
+The browser selects only the reviewed Base Mainnet or Base Sepolia deployment,
+then uses its fixed RPC and Registry for signature verification, reads,
+user-approved writes, receipt, block, and event checks. Request and imported
+package values cannot select an arbitrary RPC or Registry. The CDP URL remains
+Worker-only, and the Worker removes its internal grant token before forwarding
+a validated request. The browser-facing Paymaster route allows cross-origin
+requests only from exact configured Base Account popup origins and does not
+allow cookies. Mainnet and Sepolia sponsorship are enabled behind independent
+browser, Worker, and CDP policy gates. x402 remains disabled.

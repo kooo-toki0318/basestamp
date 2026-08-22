@@ -40,6 +40,7 @@ docs/HANDOFF.md
 docs/sponsorship.md
 docs/turnstile.md
 docs/validation-log.md
+docs/assets/base-dashboard/
 
 # Foundry build and deployment artifacts
 /cache/
