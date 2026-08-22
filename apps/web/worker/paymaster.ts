@@ -26,7 +26,8 @@ import { SPONSOR_TURNSTILE_ACTION } from "../src/lib/sponsor";
 import { hmacSha256Hex, sha256Hex } from "./crypto";
 import { ApiError } from "./http";
 import {
-  validatePaymasterRequest,
+  validatePaymasterEnvelope,
+  type ValidatedPaymasterEnvelope,
   type ValidatedPaymasterRequest
 } from "./paymaster-policy";
 import {
@@ -112,7 +113,7 @@ export type SponsorProxyRepository = {
 };
 
 export type PaymasterAccountVerifier = (
-  request: ValidatedPaymasterRequest
+  request: ValidatedPaymasterEnvelope
 ) => Promise<void>;
 
 export type PaymasterProvider = (
@@ -274,7 +275,7 @@ function canonicalJson(value: unknown): string {
   rejectSponsorship();
 }
 
-function requestFingerprint(request: ValidatedPaymasterRequest): Promise<string> {
+function requestFingerprint(request: ValidatedPaymasterEnvelope): Promise<string> {
   const params = request.raw.params;
   if (!Array.isArray(params)) rejectSponsorship();
   return sha256Hex(canonicalJson({ method: request.method, params: params.slice(0, 3) }));
@@ -416,7 +417,7 @@ function readStoredResult(
 }
 
 function createProviderPayload(
-  request: ValidatedPaymasterRequest
+  request: ValidatedPaymasterEnvelope
 ): Record<string, unknown> {
   const params = request.raw.params;
   if (!Array.isArray(params) || params.length !== 4) rejectSponsorship();
@@ -460,7 +461,7 @@ async function defaultPaymasterProvider(
 
 function parseProviderResponse(
   response: unknown,
-  request: ValidatedPaymasterRequest
+  request: ValidatedPaymasterEnvelope
 ): PaymasterResult {
   if (!isRecord(response) || response.jsonrpc !== "2.0" || response.id !== request.id) {
     providerUnavailable();
@@ -657,7 +658,7 @@ async function verifyBaseAccountWithClient<
   }
 }
 
-async function defaultVerifyBaseAccount(
+export async function defaultVerifyBaseAccount(
   env: Bindings,
   request: ValidatedPaymasterRequest
 ): Promise<void> {
@@ -710,7 +711,18 @@ export async function proxyPaymasterRequest(
   getSponsorConfig(arguments_.env);
 
   const builderCode = requireBuilderCode(arguments_.env);
-  const request = validatePaymasterRequest(arguments_.request, builderCode);
+  let request: ValidatedPaymasterEnvelope;
+  try {
+    request = validatePaymasterEnvelope(arguments_.request);
+  } catch (error) {
+    if (error instanceof ApiError) {
+      console.warn(JSON.stringify({
+        event: "sponsor_proxy_rejected",
+        stage: "request_envelope"
+      }));
+    }
+    throw error;
+  }
   const config = getPaymasterConfig(
     arguments_.env,
     request.chainId,
@@ -736,6 +748,12 @@ export async function proxyPaymasterRequest(
     now,
     policyVersion: config.policyVersion
   })) {
+    console.warn(JSON.stringify({
+      event: "sponsor_proxy_rejected",
+      stage: "grant_authorization",
+      method: request.method,
+      chainId: request.chainId
+    }));
     rejectSponsorship();
   }
 
@@ -763,9 +781,9 @@ export async function proxyPaymasterRequest(
   if (claim.status !== "grant_issued") rejectSponsorship();
 
   if (arguments_.accountVerifier !== undefined) {
+    // Optional hook for tests or explicit deployments. Production deliberately
+    // leaves wallet/account internals to Base Account + the CDP Paymaster.
     await arguments_.accountVerifier(request);
-  } else {
-    await defaultVerifyBaseAccount(arguments_.env, request);
   }
   const ipBucketKey = await createIpBucketKey(
     config.ipBucketHmacSecret,

@@ -69,6 +69,18 @@ export type ValidatedPaymasterRequest = {
   sender: Address;
 };
 
+export type ValidatedPaymasterEnvelope = {
+  chainId: SupportedChainId;
+  context: {
+    claimId: string;
+    grantToken: string;
+  };
+  id: JsonRpcId;
+  method: PaymasterMethod;
+  raw: Record<string, unknown>;
+  sender: Address;
+};
+
 function rejectPaymasterRequest(): never {
   throw new ApiError(
     403,
@@ -374,6 +386,20 @@ function requireContext(value: unknown) {
   return { claimId: value.claimId, grantToken: value.grantToken };
 }
 
+function requireProxyContext(value: unknown) {
+  if (
+    !isRecord(value) ||
+    typeof value.claimId !== "string" ||
+    !UUID_V4_PATTERN.test(value.claimId) ||
+    typeof value.grantToken !== "string" ||
+    !GRANT_TOKEN_PATTERN.test(value.grantToken)
+  ) {
+    rejectPaymasterRequest();
+  }
+
+  return { claimId: value.claimId, grantToken: value.grantToken };
+}
+
 function requireUserOperation(
   value: unknown,
   method: PaymasterMethod,
@@ -423,6 +449,56 @@ function requireUserOperation(
     call: decodeAccountCall(callData, builderCode, registryAddress),
     counterfactualAccount: decodeInitCode(value.initCode),
     sender
+  };
+}
+
+/**
+ * Validate only the stable ERC-7677 boundary that BaseStamp owns.
+ *
+ * Wallet/AA tooling is intentionally allowed to evolve the UserOperation
+ * object. Contract/function restrictions belong in the CDP Paymaster policy,
+ * while BaseStamp keeps grant, wallet, chain, quota, and response validation.
+ */
+export function validatePaymasterEnvelope(
+  value: unknown
+): ValidatedPaymasterEnvelope {
+  if (!isRecord(value) || value.jsonrpc !== "2.0") {
+    rejectPaymasterRequest();
+  }
+
+  const id = requireJsonRpcId(value.id);
+
+  if (
+    value.method !== "pm_getPaymasterStubData" &&
+    value.method !== "pm_getPaymasterData"
+  ) {
+    rejectPaymasterRequest();
+  }
+  const method = value.method;
+
+  if (!isUnknownArray(value.params) || value.params.length !== 4) {
+    rejectPaymasterRequest();
+  }
+
+  const [userOperation, entryPoint, rawChainId, context] = value.params;
+
+  if (
+    !isRecord(userOperation) ||
+    typeof userOperation.sender !== "string" ||
+    !isAddress(userOperation.sender) ||
+    typeof entryPoint !== "string" ||
+    !isAddress(entryPoint)
+  ) {
+    rejectPaymasterRequest();
+  }
+
+  return {
+    chainId: requireSupportedChainId(rawChainId),
+    context: requireProxyContext(context),
+    id,
+    method,
+    raw: value,
+    sender: getAddress(userOperation.sender)
   };
 }
 
