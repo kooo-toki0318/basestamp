@@ -86,7 +86,6 @@ export type SponsorProxyRepository = {
     fingerprintHash: string;
     responseJson: string;
   }): Promise<void>;
-  deny(claimId: string, now: number): Promise<void>;
   findClaim(claimId: string): Promise<SponsorClaim | null>;
   release(claimId: string): Promise<void>;
   reserve(arguments_: {
@@ -793,6 +792,7 @@ export async function proxyPaymasterRequest(
 
     if (
       claim.status !== "grant_issued" &&
+      claim.status !== "denied" &&
       claim.status !== "sponsored" &&
       claim.status !== "requested"
     ) {
@@ -806,9 +806,13 @@ export async function proxyPaymasterRequest(
       rejectSponsorship();
     }
 
-    if (claim.status === "grant_issued" || claim.status === "sponsored") {
+    if (
+      claim.status === "grant_issued" ||
+      claim.status === "denied" ||
+      claim.status === "sponsored"
+    ) {
       if (
-        claim.status === "grant_issued" &&
+        claim.status !== "sponsored" &&
         arguments_.accountVerifier !== undefined
       ) {
         // Optional hook for tests or explicit deployments. Production
@@ -859,14 +863,7 @@ export async function proxyPaymasterRequest(
   try {
     result = parseProviderResponse(providerResponse, request);
   } catch (error) {
-    if (
-      error instanceof ApiError &&
-      error.code === "sponsor_provider_rejected"
-    ) {
-      await repository.deny(request.context.claimId, now);
-    } else {
-      await repository.release(request.context.claimId);
-    }
+    await repository.release(request.context.claimId);
     throw error;
   }
 
@@ -961,8 +958,11 @@ export function createD1SponsorProxyRepository(
           "reserved_wallet_key = NULL, wallet_lifetime_bypassed = 0, " +
           "request_ip_bucket_key = NULL, request_day_start = NULL, " +
           "request_month_start = NULL, request_method = ?, " +
-          "request_fingerprint_hash = ?, requested_at = ? " +
-          "WHERE claim_id = ? AND status IN ('grant_issued', 'sponsored') " +
+          "request_fingerprint_hash = ?, requested_at = ?, " +
+          "terminal_at = CASE WHEN sponsored_at IS NULL THEN NULL " +
+          "ELSE terminal_at END " +
+          "WHERE claim_id = ? AND status IN " +
+          "('grant_issued', 'denied', 'sponsored') " +
           "AND grant_token_hash = ? AND grant_wallet_key = ? " +
           "AND policy_version = ? AND grant_expires_at > ?"
       )
@@ -1040,19 +1040,5 @@ export function createD1SponsorProxyRepository(
           "WHERE claim_id = ? AND status = 'requested'"
       ).bind(claimId).run();
     },
-
-    async deny(claimId, now) {
-      await database.prepare(
-        "UPDATE sponsor_claims SET status = CASE " +
-          "WHEN sponsored_at IS NULL THEN 'denied' ELSE 'sponsored' END, " +
-          "reserved_wallet_key = NULL, request_ip_bucket_key = NULL, " +
-          "request_day_start = NULL, request_month_start = NULL, " +
-          "request_method = NULL, request_fingerprint_hash = NULL, " +
-          "requested_at = NULL, wallet_lifetime_bypassed = 0, " +
-          "terminal_at = CASE WHEN sponsored_at IS NULL THEN ? " +
-          "ELSE terminal_at END " +
-          "WHERE claim_id = ? AND status = 'requested'"
-      ).bind(now, claimId).run();
-    }
   };
 }

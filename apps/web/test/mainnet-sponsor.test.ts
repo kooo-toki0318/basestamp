@@ -101,7 +101,6 @@ function repositoryFor(claim: SponsorClaim): SponsorProxyRepository {
   return {
     completeSponsored: () => Promise.resolve(),
     completeStub: () => Promise.resolve(),
-    deny: () => Promise.resolve(),
     findClaim: () => Promise.resolve(claim),
     release: () => Promise.resolve(),
     reserve: () => Promise.resolve(true)

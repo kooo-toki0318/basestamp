@@ -168,11 +168,6 @@ function createRepository(
       };
       return Promise.resolve();
     },
-    deny() {
-      events.push("denied");
-      current = { ...current, status: resumeStatus === "sponsored" ? "sponsored" : "denied" };
-      return Promise.resolve();
-    },
     release() {
       events.push("released");
       current = { ...current, status: resumeStatus };
@@ -464,25 +459,59 @@ describe("Paymaster proxy", () => {
     ]);
   });
 
-  it("makes an explicit provider denial terminal", async () => {
-    const memory = createRepository(await createClaim());
-    await expect(proxyPaymasterRequest({
-      accountVerifier: () => Promise.resolve(),
-      env,
-      now: NOW,
-      provider: () => Promise.resolve({
-        jsonrpc: "2.0",
-        id: 7,
-        error: { code: -32000, message: "denied", secret: "must-not-leak" }
-      }),
-      repository: memory.repository,
-      request: createRequest()
-    })).rejects.toMatchObject({ code: "sponsor_provider_rejected", status: 403 });
-    expect(memory.events).toEqual([
-      "reserve",
-      "denied"
-    ]);
-  });
+  it(
+    "releases a provider-rejected stub so the same claim can retry",
+    async () => {
+      const memory = createRepository(await createClaim());
+      const request = createRequest("pm_getPaymasterStubData");
+      let providerCalls = 0;
+      const call = () => proxyPaymasterRequest({
+        accountVerifier: () => Promise.resolve(),
+        env,
+        now: NOW,
+        provider: () => {
+          providerCalls += 1;
+          return Promise.resolve(
+            providerCalls === 1
+              ? {
+                  jsonrpc: "2.0",
+                  id: 7,
+                  error: {
+                    code: -32000,
+                    message: "denied",
+                    secret: "must-not-leak"
+                  }
+                }
+              : {
+                  jsonrpc: "2.0",
+                  id: 7,
+                  result: {
+                    isFinal: false,
+                    paymasterAndData: PAYMASTER_AND_DATA
+                  }
+                }
+          );
+        },
+        repository: memory.repository,
+        request
+      });
+
+      await expect(call()).rejects.toMatchObject({
+        code: "sponsor_provider_rejected",
+        status: 403
+      });
+      await expect(call()).resolves.toMatchObject({
+        result: { isFinal: false, paymasterAndData: PAYMASTER_AND_DATA }
+      });
+      expect(providerCalls).toBe(2);
+      expect(memory.events).toEqual([
+        "reserve",
+        "released",
+        "reserve",
+        "stub"
+      ]);
+    }
+  );
 
   it("rejects a bad grant before account verification or provider forwarding", async () => {
     const memory = createRepository(

@@ -69,7 +69,7 @@ function reserve(
     grantWalletKey: claim.walletKey,
     method,
     now: NOW,
-    policyVersion: 2,
+    policyVersion: 2
   });
 }
 
@@ -171,6 +171,34 @@ describe("Paymaster D1 claim reservation", () => {
 
     expect(await readClaim(claim.claimId)).toMatchObject({
       status: "sponsored"
+    });
+    expect(await runtimeQuotaRows()).toBe(0);
+  });
+
+  it("recovers a still-valid claim poisoned as denied by an older Worker", async () => {
+    const repository = createD1SponsorProxyRepository(env.DB);
+    const claim = fixture("claim-denied-recovery", 3_250);
+    await seedClaim(claim);
+    await env.DB.prepare(
+      "UPDATE sponsor_claims SET status = 'denied', terminal_at = ? " +
+        "WHERE claim_id = ?"
+    ).bind(NOW - 1, claim.claimId).run();
+
+    expect(await reserve(repository, claim)).toBe(true);
+    await expect(
+      env.DB.prepare(
+        "SELECT status, terminal_at FROM sponsor_claims WHERE claim_id = ?"
+      ).bind(claim.claimId).first<{ status: string; terminal_at: number | null }>()
+    ).resolves.toEqual({ status: "requested", terminal_at: null });
+
+    await repository.release(claim.claimId);
+
+    expect(await readClaim(claim.claimId)).toEqual({
+      request_fingerprint_hash: null,
+      request_ip_bucket_key: null,
+      request_method: null,
+      reserved_wallet_key: null,
+      status: "grant_issued"
     });
     expect(await runtimeQuotaRows()).toBe(0);
   });

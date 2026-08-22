@@ -76,7 +76,9 @@ export async function runCoreCleanup(
         "|| ':' || reserved_wallet_key)"
     ).bind(staleRequestCutoff, now, staleRequestCutoff),
     database.prepare(
-      "UPDATE sponsor_claims SET status = 'grant_issued', " +
+      "UPDATE sponsor_claims SET status = CASE " +
+        "WHEN sponsored_at IS NULL THEN 'grant_issued' " +
+        "ELSE 'sponsored' END, " +
         "reserved_wallet_key = NULL, request_ip_bucket_key = NULL, " +
         "request_day_start = NULL, request_month_start = NULL, " +
         "request_method = NULL, " +
