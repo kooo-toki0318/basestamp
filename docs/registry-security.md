@@ -90,8 +90,20 @@ manifest before configuring the application. Keep Mainnet writes and
 sponsorship disabled until the manifest, smoke checks, wallet-paid path,
 Builder attribution, external-provider policy, budgets, and kill switches have
 all passed their separate release gates.
-Before enabling the browser's Mainnet build flag, add chain-selected transaction,
-confirmation, package, explorer, and RPC paths and an integration test proving
-that the Mainnet submit path contains no Sepolia chain, Registry, or RPC value.
+
+With Foundry 1.7.1's browser signer, open the exact bridge origin
+`http://127.0.0.1:9545`; `http://localhost:9545` is outside the bridge CORS
+allowlist. Switch the wallet to Base Mainnet before connecting. If a browser
+connection times out after a successful simulation, preserve the dry-run
+evidence and inspect the chain-specific broadcast directory. Resume only with
+the script's explicit `BASESTAMP_RESUME_DRY_RUN=true` path; it rebuilds,
+re-simulates, and rejects any actual broadcast record or unexpected entry.
+
+The current release has completed these gates: the canonical manifest is
+committed, source and runtime are verified, all client paths are selected by
+chain, Mainnet is the default public network, wallet-paid and sponsored records
+have confirmed onchain, and representative direct and Base Account transaction
+calldata contain the configured ERC-8021 Builder Code. Provider budgets and
+eligibility remain operator-controlled external policy.
 
 A source-verified deployment is not an audit or security guarantee.

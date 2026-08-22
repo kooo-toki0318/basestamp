@@ -594,7 +594,7 @@ export function createCoreApp(dependencies: Dependencies = {}) {
     context.json({
       ok: true,
       service: "basestamp-core",
-      milestone: "3b-preparation"
+      milestone: "3c-mainnet-release"
     })
   );
 

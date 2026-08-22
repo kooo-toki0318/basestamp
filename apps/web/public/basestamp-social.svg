@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" role="img" aria-labelledby="title description">
+  <title id="title">BaseStamp</title>
+  <desc id="description">Record before you send. Verify the exact file later on Base.</desc>
+  <rect width="1200" height="630" fill="#f3f0e8"/>
+  <circle cx="1070" cy="42" r="330" fill="#bde0c8" opacity=".48"/>
+  <circle cx="1080" cy="580" r="220" fill="#d7eadc" opacity=".62"/>
+  <rect x="76" y="70" width="76" height="76" rx="22" fill="#205c45"/>
+  <text x="114" y="126" text-anchor="middle" font-family="Georgia,serif" font-size="48" font-weight="700" fill="#f8fff9">B</text>
+  <text x="174" y="124" font-family="Inter,Arial,sans-serif" font-size="42" font-weight="750" letter-spacing="-1.5" fill="#172c25">BaseStamp</text>
+  <text x="76" y="274" font-family="Georgia,serif" font-size="68" fill="#172c25">Record before you send.</text>
+  <text x="76" y="354" font-family="Georgia,serif" font-size="68" fill="#172c25">Verify the exact file later.</text>
+  <text x="78" y="430" font-family="Inter,Arial,sans-serif" font-size="28" fill="#4f625a">Private file commitments and local verification on Base.</text>
+  <rect x="76" y="492" width="242" height="62" rx="31" fill="#205c45"/>
+  <text x="197" y="532" text-anchor="middle" font-family="Inter,Arial,sans-serif" font-size="23" font-weight="700" fill="#f8fff9">No file upload</text>
+  <rect x="338" y="492" width="286" height="62" rx="31" fill="none" stroke="#205c45" stroke-width="2"/>
+  <text x="481" y="532" text-anchor="middle" font-family="Inter,Arial,sans-serif" font-size="23" font-weight="700" fill="#205c45">Base Mainnet live</text>
+  <path d="M1005 240c0 54-44 98-98 98s-98-44-98-98 44-98 98-98 98 44 98 98Z" fill="#205c45"/>
+  <path d="m861 241 30 30 64-74" fill="none" stroke="#f8fff9" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M762 404h290" stroke="#205c45" stroke-width="4" stroke-linecap="round" opacity=".22"/>
+  <path d="M792 442h230" stroke="#205c45" stroke-width="4" stroke-linecap="round" opacity=".16"/>
+</svg>

@@ -2,7 +2,11 @@
 
 Private file records and independent verification on Base.
 
-Live Base Sepolia preview: [basestamp-web.ndun000.workers.dev](https://basestamp-web.ndun000.workers.dev/)
+**Live Mainnet app:** [basestamp-web.ndun000.workers.dev](https://basestamp-web.ndun000.workers.dev/)
+
+**Source:** [github.com/kooo-toki0318/basestamp](https://github.com/kooo-toki0318/basestamp)
+
+Base Mainnet is the default network. Base Sepolia remains available for testing.
 
 BaseStamp lets you record that a specific file existed without uploading the
 file itself. It creates a salted commitment locally in your browser, stores the
@@ -82,20 +86,19 @@ Read the detailed [data boundaries](docs/data-boundaries.md),
 Receipt meaning and signature allowlist.
 
 The sponsorship path has independent public-build and Worker release gates.
-Both are enabled on Base Sepolia for live release validation; external
-Cloudflare/CDP resources are still created manually by the operator.
+It is enabled for Base Mainnet and Base Sepolia. BaseStamp validates the
+authenticated session, one-time grant, wallet/chain binding, Registry call, and
+per-claim concurrency before proxying ERC-7677 requests to CDP. Eligibility,
+contract/function rules, and spend limits are controlled by the CDP Paymaster
+policy. A user must explicitly choose the wallet-paid path when sponsorship is
+unavailable; BaseStamp does not silently submit a paid transaction.
 
 ## Current release
 
-The public recording flow still targets **Base Sepolia**. The canonical Base
-Mainnet Registry is deployed and source-verified, but the browser Mainnet write
-gate remains disabled until the chain-aware client path is completed and
-reviewed.
-
-Milestone **3b preparation** is underway. The remaining real-wallet sponsor
-proof from Milestone 3a stays as a parallel release gate; it does not block
-chain-independent Mainnet readiness work. Mainnet writes and Mainnet
-sponsorship remain disabled.
+Milestones **3b (Mainnet Core MVP)** and the repository/production portion of
+**3c (Base Builder publication)** are complete. The public app defaults to Base
+Mainnet, and the same chain-selected create, confirmation, package, handoff, and
+verification paths continue to support Base Sepolia.
 
 Available:
 
@@ -110,7 +113,7 @@ Available:
 - live connector-chain revalidation before every Registry write, with an explicit switch action when the wallet and selected network differ;
 - local previews for common image, video, audio, PDF, and text formats;
 - salted SHA-256 commitments calculated in a browser worker;
-- wallet-confirmed Base Sepolia Registry transactions, including a live-validation Base Account sponsorship path with an explicit wallet-paid alternative;
+- wallet-confirmed Base Mainnet and Base Sepolia Registry transactions, with Base Account sponsorship and an explicit wallet-paid alternative;
 - Turnstile-gated, wallet- and chain-bound sponsorship grants and a Worker Paymaster proxy with strict UserOperation validation, per-claim concurrency locking, and retention cleanup;
 - real-D1 concurrency coverage proving that one claim admits only one active
   Paymaster RPC reservation while repeated ERC-7677 requests are not counted
@@ -124,13 +127,14 @@ Available:
 - classic sender-to-recipient JSON handoff;
 - wallet-free recipient verification;
 - strict package parsing and pinned Registry/RPC verification;
-- public Japanese and English legal, privacy, terms, and security-readiness
-  pages linked from every page footer.
+- public Japanese and English legal, privacy, terms, and security pages linked
+  from every page footer;
+- production ERC-8021 Builder Code attribution for direct and Base Account
+  transactions;
+- standard Web App metadata, branded icons, social image, and Base.dev submission material.
 
-Not available yet:
+Intentionally not available:
 
-- Base Mainnet recording;
-- completed real-wallet sponsorship, replay, failure, and Builder attribution validation;
 - x402;
 - server-side file or verification-package storage;
 - a public Handoff Receipt timeline or searchable Receipt index;
@@ -149,11 +153,10 @@ withdrawal surface.
 The canonical deployment record is stored in
 [`contracts/deployments/84532.json`](contracts/deployments/84532.json).
 
-## Base Mainnet launch preparation
+## Base Mainnet Registry
 
-The ownerless canonical Base Mainnet Registry is deployed and the application
-still rejects Mainnet writes while the chain-aware transaction, confirmation,
-package, explorer, and verification paths are completed.
+The ownerless canonical Registry is deployed, source-verified, and enabled in
+the public application.
 
 - **Contract:** [`0x6491b8FBB13f7ADa916dD81B0834B529285f4EdB`](https://basescan.org/address/0x6491b8FBB13f7ADa916dD81B0834B529285f4EdB#code)
 - **Deployment transaction:** [`0xa7078d…ae84`](https://basescan.org/tx/0xa7078def113cadf25d0930ff8889fbd2d96112a805281e9cf3be38f06744ae84)
@@ -163,48 +166,30 @@ package, explorer, and verification paths are completed.
 The canonical deployment record is stored in
 [`contracts/deployments/8453.json`](contracts/deployments/8453.json).
 
-The ceremony:
+The guarded deployment ceremony and browser-signer CORS recovery notes are
+documented in [Registry security](docs/registry-security.md). The deployment
+script refuses a second Mainnet deployment when this canonical manifest exists.
 
-- requires an RPC that reports Base Mainnet chain ID `8453`;
-- rejects raw private-key environment variables and supports a browser wallet,
-  Foundry keystore, Ledger, or Trezor;
-- verifies a funded, nonzero deployer address;
-- rebuilds the Registry and proves that its normalized runtime matches the
-  reviewed canonical Sepolia artifact;
-- simulates without broadcasting before an exact interactive confirmation;
-- refuses a second deployment if a Mainnet deployment or broadcast record
-  already exists;
-- requires source verification during broadcast.
+## Base Builder release
 
-Configure only ignored local values in `contracts/.env`. The deployment script
-intentionally does not source that file, so explicitly export its values into
-the current interactive shell before the reviewed ceremony:
+- **Standard Web App ID:** `6a709d282c28265d676171e1`
+- **Builder Code:** `bc_o3k81ayl`
+- **Primary URL:** [basestamp-web.ndun000.workers.dev](https://basestamp-web.ndun000.workers.dev/)
+- **Category:** Developer tools
+- **Mainnet direct transaction with ERC-8021 attribution:** [`0x709785…ef85`](https://basescan.org/tx/0x70978557cd70183acb30d70104f34ece9d3778a43e9a0c14fc258531e69bef85)
+- **Mainnet sponsored Base Account transaction with embedded ERC-8021 attribution:** [`0x77e19a…d538`](https://basescan.org/tx/0x77e19acfb8136d10e09b93fce9da9d398fce6cd2740f2f48a1f2a43f32aed538)
 
-```bash
-set -a
-source contracts/.env
-set +a
-pnpm contracts:deploy:mainnet
-```
+The production Worker has also observed Mainnet Paymaster proxy claims
+reach `sponsored`. Paymaster RPC calls used to assemble one wallet transaction
+are concurrency-controlled but are not counted as transactions or as a
+BaseStamp-specific quota.
 
-For the Foundry 1.7.1 browser signer, open the exact bridge origin
-`http://127.0.0.1:9545`; `http://localhost:9545` fails the bridge's CORS
-allowlist. Switch the wallet to the target chain before connecting. If the
-browser connection times out after a successful simulation, do not delete the
-dry-run evidence. Inspect that the chain-specific directory contains only the
-regular `dry-run/run-latest.json` and timestamped dry-run JSON, then explicitly
-set `BASESTAMP_RESUME_DRY_RUN=true` and rerun the ceremony. The script still
-rebuilds, re-simulates, rechecks chain and artifacts, and refuses any broadcast
-record or unexpected entry.
-
-Do not enable `VITE_MAINNET_WRITES_ENABLED` after the command alone. First review the
-deployment transaction, confirm source verification and runtime bytecode, and
-commit `contracts/deployments/8453.json` as the canonical record.
-The current client transaction, confirmation, package, and sponsorship paths
-remain Sepolia-specific, and the Mainnet deployment-availability gate is also
-false. Both the chain-specific implementation and a test proving that a
-Mainnet submission never references Sepolia are required before changing
-either gate.
+The exact Base.dev copy, assets, URLs, release evidence, mobile checklist, and
+operator-only Dashboard verification steps are kept in
+[`docs/base-dashboard-submission.md`](docs/base-dashboard-submission.md).
+Dashboard ownership/verification and analytics are external account state and
+must be confirmed by the project owner in Base.dev; repository checks never
+claim that state from an App ID alone.
 
 ## Local development
 
@@ -285,8 +270,8 @@ secrets for deployed Workers. Public browser settings belong in `VITE_*`
 variables and must never contain secret values.
 
 BaseStamp does not create Turnstile or CDP resources through their APIs.
-Base Sepolia sponsorship is enabled for live release validation only after its
-operator-run resource, secret, migration, and release gates have completed.
+Mainnet and Sepolia sponsorship are enabled only after their operator-run
+resource, secret, provider-policy, budget, and release gates have completed.
 The browser-facing Paymaster proxy accepts CORS only from the exact Base
 Account popup origins listed in `SPONSOR_ALLOWED_ORIGINS`; the current
 production value is `https://keys.coinbase.com`. This is a non-secret
@@ -301,12 +286,10 @@ reviewed advisory URL; neither value is secret. Keep the server and browser
 values aligned, and re-check that the GitHub channel remains enabled before a
 release.
 
-The current preview disclosures are available at [legal notice](https://basestamp-web.ndun000.workers.dev/about/legal),
+The current Mainnet beta disclosures are available at [legal notice](https://basestamp-web.ndun000.workers.dev/about/legal),
 [privacy](https://basestamp-web.ndun000.workers.dev/privacy),
 [terms](https://basestamp-web.ndun000.workers.dev/terms), and
-[security](https://basestamp-web.ndun000.workers.dev/security). They document
-the present Base Sepolia preview; they do not complete the operator, governing
-law, private contact, or specialist-review gates required for Mainnet.
+[security](https://basestamp-web.ndun000.workers.dev/security).
 
 BaseStamp's custom Workers Logs contain only fixed application-error events and,
 for HTTP failures, the method and a bounded route class. Scheduled rejections

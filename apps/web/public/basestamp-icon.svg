@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title id="title">BaseStamp</title>
+  <rect width="512" height="512" rx="128" fill="#205c45"/>
+  <circle cx="392" cy="112" r="74" fill="#bde0c8" opacity=".28"/>
+  <path d="M128 116h142c79 0 126 36 126 96 0 38-21 67-58 82 48 13 74 45 74 91 0 70-55 111-148 111H128V116Zm126 151c42 0 64-15 64-44 0-29-22-43-64-43h-48v87h48Zm9 165c47 0 71-17 71-50 0-33-24-49-71-49h-57v99h57Z" fill="#f8fff9"/>
+  <path d="M96 84h320" stroke="#f8fff9" stroke-width="14" stroke-linecap="round" opacity=".72"/>
+</svg>
