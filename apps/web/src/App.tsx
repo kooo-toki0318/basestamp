@@ -705,7 +705,7 @@ export function App() {
     <>
       <header className="shell nav">
         <a className="brand" href="/" aria-label={t("nav.home")}>
-          <span aria-hidden="true">B</span>
+          <img src="/basestamp-icon.png" alt="" aria-hidden="true" />
           BaseStamp
         </a>
         <nav className="nav-links" aria-label={t("nav.primary")}>
