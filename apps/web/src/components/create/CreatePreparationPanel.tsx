@@ -33,79 +33,102 @@ export function CreatePreparationPanel({
   contentType,
   purpose,
   busy,
-  activeStep = 1,
   onChooseFile,
   onContentTypeChange,
   onPurposeChange,
   onPrepare
 }: CreatePreparationPanelProperties) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
+  const changeFileLabel = locale === "ja" ? "ファイルを変更" : "Change file";
+  const preparedFileLabel = locale === "ja" ? "記録するファイル" : "File to record";
 
   return (
     <section className="panel create-primary-panel">
-      <CreateJourney activeStep={activeStep} />
+      <CreateJourney activeStep={1} />
 
-      <span className="step-label">{t("create.step1")}</span>
-      <label className="field create-file-field">
-        <span>{t("create.fileLabel")}</span>
-        <input
-          type="file"
-          onChange={(event) => {
-            onChooseFile(event.target.files?.[0]);
-          }}
-          disabled={busy}
-        />
-      </label>
+      <div className="create-prepare-form">
+        <span className="step-label">{t("create.step1")}</span>
+        <label className="field create-file-field">
+          <span>{t("create.fileLabel")}</span>
+          <input
+            type="file"
+            onChange={(event) => {
+              onChooseFile(event.target.files?.[0]);
+            }}
+            disabled={busy}
+          />
+        </label>
+
+        {file !== undefined && (
+          <FilePreview
+            key={`${file.name}:${String(file.size)}:${String(file.lastModified)}`}
+            file={file}
+          />
+        )}
+
+        <label className="field">
+          <span>{t("create.purpose")}</span>
+          <select
+            value={purpose}
+            onChange={(event) => {
+              onPurposeChange(event.target.value as Purpose);
+            }}
+            disabled={busy}
+          >
+            {PURPOSES.map((value) => (
+              <option key={value} value={value}>
+                {t(PURPOSE_LABEL_KEYS[value])}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <details className="preparation-options">
+          <summary>{t("create.contentType")}</summary>
+          <select
+            className="preparation-option-select"
+            aria-label={t("create.contentType")}
+            value={contentType}
+            onChange={(event) => {
+              onContentTypeChange(event.target.value as ContentType);
+            }}
+            disabled={busy}
+          >
+            {CONTENT_TYPES.map((value) => (
+              <option key={value} value={value}>{value}</option>
+            ))}
+          </select>
+        </details>
+
+        <button
+          type="button"
+          className="create-continue-action"
+          onClick={onPrepare}
+          disabled={busy || file === undefined}
+        >
+          {t("create.calculate")}
+        </button>
+      </div>
 
       {file !== undefined && (
-        <FilePreview
-          key={`${file.name}:${String(file.size)}:${String(file.lastModified)}`}
-          file={file}
-        />
+        <div className="create-prepared-summary">
+          <div className="create-prepared-copy">
+            <span>{preparedFileLabel}</span>
+            <strong title={file.name}>{file.name}</strong>
+            <small>{t(PURPOSE_LABEL_KEYS[purpose])}</small>
+          </div>
+          <button
+            type="button"
+            className="secondary compact create-change-file"
+            onClick={() => {
+              onChooseFile(undefined);
+            }}
+            disabled={busy}
+          >
+            {changeFileLabel}
+          </button>
+        </div>
       )}
-
-      <label className="field">
-        <span>{t("create.purpose")}</span>
-        <select
-          value={purpose}
-          onChange={(event) => {
-            onPurposeChange(event.target.value as Purpose);
-          }}
-          disabled={busy}
-        >
-          {PURPOSES.map((value) => (
-            <option key={value} value={value}>
-              {t(PURPOSE_LABEL_KEYS[value])}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      <details className="preparation-options">
-        <summary>{t("create.contentType")}</summary>
-        <select
-          className="preparation-option-select"
-          aria-label={t("create.contentType")}
-          value={contentType}
-          onChange={(event) => {
-            onContentTypeChange(event.target.value as ContentType);
-          }}
-          disabled={busy}
-        >
-          {CONTENT_TYPES.map((value) => (
-            <option key={value} value={value}>{value}</option>
-          ))}
-        </select>
-      </details>
-
-      <button
-        type="button"
-        className="create-continue-action"
-        onClick={onPrepare}
-        disabled={busy || file === undefined}
-      >
-        {t("create.calculate")}
-      </button>
     </section>
   );
 }
