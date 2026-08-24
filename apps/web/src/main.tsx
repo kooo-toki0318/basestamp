@@ -10,6 +10,7 @@ import "./improvements.css";
 import "./ux-flow.css";
 import "./brand-polish.css";
 import "./information.css";
+import "./ux-fixes.css";
 import { queryClient, wagmiConfig } from "./wagmi";
 
 captureHandoffFragment();
