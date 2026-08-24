@@ -39,9 +39,24 @@ export function CreatePreparationPanel({
   const { t } = useI18n();
 
   return (
-    <section className="panel">
+    <section className="panel create-primary-panel">
+      <ol className="create-journey" aria-label={t("home.previewAria")}>
+        <li>
+          <span>1</span>
+          <strong>{t("create.step1")}</strong>
+        </li>
+        <li>
+          <span>2</span>
+          <strong>{t("create.step3")}</strong>
+        </li>
+        <li>
+          <span>3</span>
+          <strong>{t("create.shareTitle")}</strong>
+        </li>
+      </ol>
+
       <span className="step-label">{t("create.step1")}</span>
-      <label className="field">
+      <label className="field create-file-field">
         <span>{t("create.fileLabel")}</span>
         <input
           type="file"
@@ -51,12 +66,14 @@ export function CreatePreparationPanel({
           disabled={busy}
         />
       </label>
+
       {file !== undefined && (
         <FilePreview
           key={`${file.name}:${String(file.size)}:${String(file.lastModified)}`}
           file={file}
         />
       )}
+
       <label className="field">
         <span>{t("create.purpose")}</span>
         <select
@@ -73,7 +90,8 @@ export function CreatePreparationPanel({
           ))}
         </select>
       </label>
-      <details>
+
+      <details className="preparation-options">
         <summary>{t("create.contentType")}</summary>
         <label className="field">
           <span>{t("create.contentType")}</span>
@@ -90,8 +108,10 @@ export function CreatePreparationPanel({
           </select>
         </label>
       </details>
+
       <button
         type="button"
+        className="create-continue-action"
         onClick={onPrepare}
         disabled={busy || file === undefined}
       >
