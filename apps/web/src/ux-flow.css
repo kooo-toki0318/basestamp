@@ -1,0 +1,420 @@
+/* UX experiment layer: keep the original visual system, simplify product flow. */
+
+/* The legal/privacy pages remain untouched. In task flows, keep technical notes
+   behind explicit disclosure instead of placing them before the primary task. */
+.shell.workspace > .privacy-warning {
+  display: none;
+}
+
+/* Create: make the product journey obvious without turning it into instructions. */
+.create-primary-panel,
+.create-technical-disclosure,
+.create-record-panel,
+.create-success-panel,
+.record-access,
+.record-access-ready {
+  width: min(100%, 760px);
+  margin-inline: auto;
+}
+
+.create-primary-panel {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 20px;
+}
+
+.create-journey {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0 0 4px;
+  padding: 0;
+  list-style: none;
+}
+
+.create-journey li {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  color: #66776f;
+  font-size: 0.76rem;
+}
+
+.create-journey li + li::before {
+  width: 18px;
+  height: 1px;
+  flex: 0 0 auto;
+  margin-right: 2px;
+  background: rgb(23 44 37 / 16%);
+  content: "";
+}
+
+.create-journey li > span {
+  display: grid;
+  width: 25px;
+  height: 25px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  background: #31785b;
+  font-size: 0.68rem;
+  font-weight: 850;
+}
+
+.create-journey strong {
+  min-width: 0;
+  color: #314f43;
+  font-size: 0.76rem;
+  line-height: 1.25;
+}
+
+.create-file-field input[type="file"] {
+  padding: 12px;
+  border: 1px dashed rgb(32 92 69 / 34%);
+  border-radius: 14px;
+  background: rgb(244 250 246 / 78%);
+}
+
+.preparation-options {
+  color: #5d6f67;
+  font-size: 0.82rem;
+}
+
+.preparation-options summary,
+.create-technical-disclosure > summary,
+.success-details > summary {
+  cursor: pointer;
+  font-weight: 760;
+}
+
+.preparation-options[open] {
+  display: grid;
+  gap: 10px;
+}
+
+.create-continue-action,
+.create-record-action {
+  width: 100%;
+  min-height: 50px;
+  font-size: 0.95rem;
+}
+
+.create-technical-disclosure {
+  grid-column: 1 / -1;
+  padding: 0;
+  overflow: hidden;
+  background: rgb(255 255 255 / 38%);
+}
+
+.create-technical-disclosure > summary {
+  padding: 14px 18px;
+  color: #596b63;
+  font-size: 0.82rem;
+}
+
+.create-technical-disclosure[open] {
+  padding-bottom: 18px;
+}
+
+.create-technical-disclosure[open] > *:not(summary) {
+  margin-inline: 18px;
+}
+
+.create-public-record-note {
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border-left: 3px solid #a87836;
+  border-radius: 0 10px 10px 0;
+  background: rgb(255 247 222 / 50%);
+}
+
+.create-public-record-note strong {
+  font-size: 0.78rem;
+}
+
+.create-public-record-note p {
+  margin: 4px 0 0;
+  color: #6b604e;
+  font-size: 0.78rem;
+  line-height: 1.55;
+}
+
+/* Status is useful, but should not compete with the current action. */
+.operation-status {
+  width: min(100%, 760px);
+  margin: 0 auto 14px;
+  padding: 7px 4px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.operation-status.is-busy,
+.operation-status.is-success {
+  border: 0;
+  background: transparent;
+}
+
+.operation-status div > span {
+  font-size: 0.58rem;
+}
+
+.operation-status p {
+  font-size: 0.8rem;
+}
+
+/* Wallet/authentication is a prerequisite inside the Record step, not its own
+   product journey. Collapse the old two-step readiness checklist. */
+.auth-readiness {
+  width: min(100%, 760px);
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  margin: 6px auto 14px;
+  padding: 17px 18px;
+  border-radius: 16px;
+}
+
+.auth-readiness .auth-checklist {
+  display: none;
+}
+
+.auth-readiness-copy h2 {
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.auth-readiness-copy p {
+  max-width: 48rem;
+  font-size: 0.8rem;
+}
+
+.auth-readiness-actions {
+  grid-column: auto;
+  justify-content: flex-end;
+}
+
+.authentication-prompt {
+  width: min(100%, 760px);
+  margin: 6px auto 14px;
+  padding: 14px 16px;
+}
+
+.authentication-prompt h2 {
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.record-access-ready {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-block: 6px 14px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  color: #205c45;
+  background: rgb(226 244 232 / 58%);
+  font-size: 0.8rem;
+}
+
+.record-access-ready > span {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  background: #31785b;
+  font-size: 0.68rem;
+  font-weight: 900;
+}
+
+.record-access-ready code {
+  margin-left: auto;
+  color: #53675e;
+  font-size: 0.72rem;
+}
+
+/* Record step: gas is a secondary attribute, not the task itself. */
+.create-record-panel {
+  display: grid;
+  gap: 14px;
+  margin-inline: auto;
+}
+
+.create-record-hint,
+.create-fee-note {
+  margin-block: 0;
+}
+
+.gas-control {
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid rgb(23 44 37 / 12%);
+  border-radius: 13px;
+  background: rgb(255 255 255 / 48%);
+}
+
+.gas-summary-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.8rem;
+}
+
+.gas-summary-row > span {
+  color: #64756d;
+  font-weight: 700;
+}
+
+.gas-summary-row > strong {
+  color: #205c45;
+  text-align: right;
+}
+
+.compact-gas-control p,
+.compact-gas-control .sponsor-capability-progress {
+  margin: 0;
+  font-size: 0.78rem;
+}
+
+.compact-gas-control .sponsor-choice-action {
+  min-height: 34px;
+  justify-self: start;
+  padding: 7px 10px;
+  font-size: 0.72rem;
+}
+
+/* Success: next action first, chain mechanics second. */
+.create-success-panel {
+  padding: clamp(18px, 4vw, 28px);
+}
+
+.success-lede {
+  margin: 0;
+  color: #40564d;
+  line-height: 1.6;
+}
+
+.share-panel-primary {
+  margin-top: 6px;
+  padding-top: 18px;
+}
+
+.share-panel-primary .share-primary-action {
+  margin-top: 2px;
+}
+
+.success-secondary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+.success-secondary-actions > button {
+  flex: 1 1 190px;
+}
+
+.success-details {
+  display: grid;
+  gap: 12px;
+  margin-top: 4px;
+  padding-top: 13px;
+  border-top: 1px solid rgb(23 44 37 / 12%);
+}
+
+.success-details > summary {
+  color: #596b63;
+  font-size: 0.78rem;
+}
+
+.success-details[open] {
+  padding-bottom: 4px;
+}
+
+.standalone-share-actions {
+  justify-self: start;
+}
+
+/* Recipient flow: the task is choosing the received file. Registry internals
+   and the old narrative journey should not precede that action. */
+.handoff-page > .handoff-story,
+.handoff-record-card {
+  display: none;
+}
+
+.handoff-page .handoff-workspace-grid {
+  width: min(100%, 760px);
+  grid-template-columns: minmax(0, 1fr);
+  margin-inline: auto;
+}
+
+.handoff-file-card {
+  padding: clamp(18px, 4vw, 28px);
+}
+
+.handoff-file-card > h2 {
+  margin-top: 4px;
+}
+
+.handoff-page > .handoff-receipt-card,
+.handoff-page > .handoff-share-card,
+.handoff-page > .handoff-recheck-card {
+  width: min(100%, 760px);
+  margin-inline: auto;
+}
+
+/* Verification-file fallback is intentionally simple. */
+#verify-json,
+#verify-json + details {
+  width: min(100%, 760px);
+  margin-inline: auto;
+}
+
+@media (max-width: 720px) {
+  .create-journey {
+    gap: 5px;
+  }
+
+  .create-journey li {
+    display: grid;
+    justify-items: center;
+    gap: 5px;
+    text-align: center;
+  }
+
+  .create-journey li + li::before {
+    display: none;
+  }
+
+  .create-journey strong {
+    font-size: 0.68rem;
+  }
+
+  .auth-readiness {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .auth-readiness-actions {
+    grid-column: 1;
+    justify-content: stretch;
+  }
+
+  .auth-readiness-actions button {
+    flex: 1 1 100%;
+  }
+
+  .success-secondary-actions {
+    display: grid;
+  }
+
+  .success-secondary-actions > button {
+    width: 100%;
+  }
+}
