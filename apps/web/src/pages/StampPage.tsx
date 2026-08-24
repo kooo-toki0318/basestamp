@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { hexToBytes, type Hex } from "viem";
 import { useI18n } from "../i18n-context";
-import { HandoffStory } from "../components/HandoffStory";
 import { localeTag } from "../locale";
 import { calculateFileCommitment } from "../lib/commitment-worker";
 import {
@@ -206,224 +205,191 @@ export function StampPage({
     }
   }
 
+  const verificationStep: 1 | 2 | 3 =
+    package_ === undefined ? 1 : match === undefined ? 2 : 3;
+
   return (
-    <section className="shell workspace">
+    <section className="shell workspace verify-file-page">
       <div className="workspace-heading">
         <p className="eyebrow">
           {t("stamp.eyebrow", { network: routeNetwork.name })}
         </p>
         <h1>{t("stamp.title")}</h1>
-        <p className="lede">
-          {t("stamp.lede", { network: routeNetwork.name })}
-        </p>
+        <p className="lede">{t("stamp.lede", { network: routeNetwork.name })}</p>
       </div>
 
-      <HandoffStory compact activeRole="verify" />
-
-      <div className="flow-grid">
-        <section className="panel">
-          <span className="step-label">{t("stamp.step1")}</span>
-          <dl className="technical-list">
-            <div>
-              <dt>{t("stamp.id")}</dt>
-              <dd title={stampId}>{shortHex(stampId)}</dd>
-            </div>
-            <div>
-              <dt>{t("stamp.registry")}</dt>
-              <dd title={deployment.registryAddress}>
-                {shortHex(deployment.registryAddress)}
-              </dd>
-            </div>
-            {stamp !== undefined && (
-              <>
-                <div>
-                  <dt>{t("stamp.creator")}</dt>
-                  <dd title={stamp.creator}>
-                    {shortHex(stamp.creator)}
-                  </dd>
-                </div>
-                <div>
-                  <dt>{t("stamp.created")}</dt>
-                  <dd>{formatUnixSeconds(stamp.createdAt)}</dd>
-                </div>
-                <div>
-                  <dt>{t("stamp.commitment")}</dt>
-                  <dd title={stamp.contentCommitment}>
-                    {shortHex(stamp.contentCommitment)}
-                  </dd>
-                </div>
-              </>
-            )}
-          </dl>
-          <a
-            href={
-              deployment.explorerUrl +
-              "/address/" +
-              deployment.registryAddress
+      <section className="panel verify-main-panel">
+        <ol className="create-journey verify-journey" aria-label={t("verifyStart.needsTitle")}>
+          <li className={verificationStep === 1 ? "is-active" : "is-complete"}>
+            <span>{verificationStep > 1 ? "✓" : "1"}</span>
+            <strong>{t("verifyStart.step1")}</strong>
+          </li>
+          <li
+            className={
+              verificationStep === 2
+                ? "is-active"
+                : verificationStep > 2
+                  ? "is-complete"
+                  : undefined
             }
-            target="_blank"
-            rel="noreferrer"
           >
-            {t("stamp.openExplorer")}
-          </a>
-        </section>
+            <span>{verificationStep > 2 ? "✓" : "2"}</span>
+            <strong>{t("stamp.step3")}</strong>
+          </li>
+          <li className={verificationStep === 3 ? "is-active" : undefined}>
+            <span>3</span>
+            <strong>{t("stamp.resultSummary")}</strong>
+          </li>
+        </ol>
 
-        <section className="panel">
-          <span className="step-label">{t("stamp.step2")}</span>
-          {package_ === undefined ? (
-            <>
-              <label className="field">
-                <span>{t("stamp.packageLabel")}</span>
-                <input
-                  type="file"
-                  accept="application/json,.json"
-                  onChange={(event) =>
-                    void loadPackage(event.target.files?.[0])
-                  }
-                  disabled={busy || stamp === undefined}
-                />
-              </label>
-              <p className="muted">
-                {t("stamp.untrustedNotice")}
-              </p>
-            </>
-          ) : (
-            <div className="package-loaded">
-              <span
-                className="package-loaded-icon"
-                aria-hidden="true"
-              >
-                ✓
-              </span>
-              <strong>{t("stamp.packageLoadedTitle")}</strong>
-              <p className="muted">
-                {t("stamp.packageLoadedBody")}
-              </p>
+        {package_ === undefined ? (
+          <>
+            <span className="step-label">{t("stamp.step2")}</span>
+            <label className="field verify-package-field">
+              <span>{t("stamp.packageLabel")}</span>
+              <input
+                type="file"
+                accept="application/json,.json"
+                onChange={(event) =>
+                  void loadPackage(event.target.files?.[0])
+                }
+                disabled={busy || stamp === undefined}
+              />
+            </label>
+            <p className="muted">{t("stamp.untrustedNotice")}</p>
+          </>
+        ) : (
+          <>
+            <div className="verify-info-ready">
+              <span aria-hidden="true">✓</span>
+              <div>
+                <strong>{t("stamp.packageLoadedTitle")}</strong>
+                <p>{t("stamp.packageLoadedBody")}</p>
+              </div>
               <button
                 type="button"
-                className="secondary"
+                className="secondary compact"
                 onClick={restartVerification}
                 disabled={busy}
               >
                 {t("stamp.replacePackage")}
               </button>
             </div>
-          )}
-        </section>
 
-        <section className="panel">
-          <span className="step-label">{t("stamp.step3")}</span>
-          <label className="field">
-            <span>{t("stamp.fileLabel")}</span>
-            <input
-              type="file"
-              onChange={(event) => {
-                const nextFile = event.target.files?.[0];
+            <span className="step-label">{t("stamp.step3")}</span>
+            <label className="field verify-file-field">
+              <span>{t("stamp.fileLabel")}</span>
+              <input
+                type="file"
+                onChange={(event) => {
+                  const nextFile = event.target.files?.[0];
 
-                setMatch(undefined);
+                  setMatch(undefined);
 
-                if (
-                  nextFile !== undefined &&
-                  nextFile.size <= MAX_FILE_SIZE_BYTES
-                ) {
-                  setFile(nextFile);
-                } else {
-                  setFile(undefined);
+                  if (
+                    nextFile !== undefined &&
+                    nextFile.size <= MAX_FILE_SIZE_BYTES
+                  ) {
+                    setFile(nextFile);
+                  } else {
+                    setFile(undefined);
 
-                  if (nextFile !== undefined) {
-                    setStatus(t("stamp.status.fileTooLarge"));
+                    if (nextFile !== undefined) {
+                      setStatus(t("stamp.status.fileTooLarge"));
+                    }
                   }
-                }
-              }}
-              disabled={busy && package_ !== undefined}
-            />
-          </label>
-          <button
-            type="button"
-            onClick={() => void verifyFile()}
-            disabled={
-              busy ||
-              file === undefined ||
-              package_ === undefined
-            }
-          >
-            {t("stamp.verifyLocally")}
-          </button>
-
-          {match !== undefined && (
-            <div
-              className={
-                match
-                  ? "verification-result success"
-                  : "verification-result failure"
-              }
-              aria-label={
-                match ? t("stamp.match") : t("stamp.noMatch")
-              }
+                }}
+                disabled={busy}
+              />
+            </label>
+            <button
+              type="button"
+              className="verify-file-action"
+              onClick={() => void verifyFile()}
+              disabled={busy || file === undefined}
             >
-              <div className="verification-result-heading">
-                <span aria-hidden="true">
-                  {match ? "✓" : "×"}
-                </span>
-                <h3>
-                  {t(
-                    match
-                      ? "stamp.matchTitle"
-                      : "stamp.noMatchTitle"
-                  )}
-                </h3>
-              </div>
-              <p>
-                {t(
+              {t("stamp.verifyLocally")}
+            </button>
+
+            {match !== undefined && (
+              <div
+                className={
                   match
-                    ? "stamp.matchBody"
-                    : "stamp.noMatchBody"
-                )}
-              </p>
+                    ? "verification-result success"
+                    : "verification-result failure"
+                }
+                aria-label={match ? t("stamp.match") : t("stamp.noMatch")}
+              >
+                <div className="verification-result-heading">
+                  <span aria-hidden="true">{match ? "✓" : "×"}</span>
+                  <h3>{t(match ? "stamp.matchTitle" : "stamp.noMatchTitle")}</h3>
+                </div>
+                <p>{t(match ? "stamp.matchBody" : "stamp.noMatchBody")}</p>
 
-              {match &&
-                package_ !== undefined &&
-                stamp !== undefined && (
-                  <>
-                    <strong className="result-summary-label">
-                      {t("stamp.resultSummary")}
-                    </strong>
-                    <dl className="result-summary">
-                      <div>
-                        <dt>{t("stamp.resultCreated")}</dt>
-                        <dd>
-                          {formatUnixSeconds(stamp.createdAt)}
-                        </dd>
-                      </div>
-                      <div>
-                        <dt>{t("stamp.resultCreator")}</dt>
-                        <dd title={stamp.creator}>
-                          {shortHex(stamp.creator)}
-                        </dd>
-                      </div>
-                      <div>
-                        <dt>{t("stamp.resultFileSize")}</dt>
-                        <dd>
-                          {package_.commitment.fileSize.toLocaleString(
-                            localeTag(locale)
-                          )}{" "}
-                          {t("common.bytes")}
-                        </dd>
-                      </div>
-                    </dl>
-                  </>
+                {match && stamp !== undefined && (
+                  <dl className="result-summary verify-result-details">
+                    <div>
+                      <dt>{t("stamp.resultCreated")}</dt>
+                      <dd>{formatUnixSeconds(stamp.createdAt)}</dd>
+                    </div>
+                    <div>
+                      <dt>{t("stamp.resultCreator")}</dt>
+                      <dd title={stamp.creator}>{shortHex(stamp.creator)}</dd>
+                    </div>
+                    <div>
+                      <dt>{t("stamp.resultFileSize")}</dt>
+                      <dd>
+                        {package_.commitment.fileSize.toLocaleString(localeTag(locale))}{" "}
+                        {t("common.bytes")}
+                      </dd>
+                    </div>
+                  </dl>
                 )}
-            </div>
+              </div>
+            )}
+          </>
+        )}
+      </section>
+
+      <details className="panel verify-record-details">
+        <summary>{t("stamp.step1")}</summary>
+        <dl className="technical-list">
+          <div>
+            <dt>{t("stamp.id")}</dt>
+            <dd title={stampId}>{shortHex(stampId)}</dd>
+          </div>
+          <div>
+            <dt>{t("stamp.registry")}</dt>
+            <dd title={deployment.registryAddress}>{shortHex(deployment.registryAddress)}</dd>
+          </div>
+          {stamp !== undefined && (
+            <>
+              <div>
+                <dt>{t("stamp.creator")}</dt>
+                <dd title={stamp.creator}>{shortHex(stamp.creator)}</dd>
+              </div>
+              <div>
+                <dt>{t("stamp.created")}</dt>
+                <dd>{formatUnixSeconds(stamp.createdAt)}</dd>
+              </div>
+              <div>
+                <dt>{t("stamp.commitment")}</dt>
+                <dd title={stamp.contentCommitment}>{shortHex(stamp.contentCommitment)}</dd>
+              </div>
+            </>
           )}
-        </section>
-      </div>
+        </dl>
+        <a
+          href={deployment.explorerUrl + "/address/" + deployment.registryAddress}
+          target="_blank"
+          rel="noreferrer"
+        >
+          {t("stamp.openExplorer")}
+        </a>
+      </details>
 
-      <div className="notice">{t("stamp.boundary")}</div>
-      <p
-        className="status prominent"
-        role="status"
-        aria-live="polite"
-      >
+      <p className="verify-boundary-note">{t("stamp.boundary")}</p>
+      <p className="status prominent verify-status" role="status" aria-live="polite">
         {status}
       </p>
     </section>
