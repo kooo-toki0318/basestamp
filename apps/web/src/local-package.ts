@@ -42,6 +42,14 @@ export function readLatestCreatedVerificationPackage(): string | undefined {
   }
 }
 
+export function clearLatestCreatedVerificationPackage(): void {
+  try {
+    sessionStorage.removeItem(LATEST_CREATED_STAMP_KEY);
+  } catch {
+    // A page reload still clears the in-memory Create state.
+  }
+}
+
 export function removeCachedVerificationPackage(stampId: Hex): void {
   try {
     sessionStorage.removeItem(PACKAGE_SESSION_PREFIX + stampId);
