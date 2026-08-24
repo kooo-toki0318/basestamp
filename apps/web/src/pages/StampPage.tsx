@@ -218,6 +218,10 @@ export function StampPage({
         <p className="lede">{t("stamp.lede", { network: routeNetwork.name })}</p>
       </div>
 
+      <p className="status prominent verify-status" role="status" aria-live="polite">
+        {status}
+      </p>
+
       <section className="panel verify-main-panel">
         <ol className="create-journey verify-journey" aria-label={t("verifyStart.needsTitle")}>
           <li className={verificationStep === 1 ? "is-active" : "is-complete"}>
@@ -389,9 +393,6 @@ export function StampPage({
       </details>
 
       <p className="verify-boundary-note">{t("stamp.boundary")}</p>
-      <p className="status prominent verify-status" role="status" aria-live="polite">
-        {status}
-      </p>
     </section>
   );
 }
