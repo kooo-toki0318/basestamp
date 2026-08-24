@@ -1,0 +1,325 @@
+/* Final UX corrections for the progressive flow branch.
+   Keep this layer small and reversible: layout/visual fixes only. */
+
+/* Create progress rail: keep the rule behind labels and make state legible. */
+.create-journey li,
+.create-journey li > span,
+.create-journey strong {
+  position: relative;
+}
+
+.create-journey li > span,
+.create-journey strong {
+  z-index: 2;
+}
+
+.create-journey strong {
+  display: inline-block;
+  width: fit-content;
+  max-width: 100%;
+  padding: 2px 6px;
+  background: var(--bs-paper-raised);
+}
+
+.create-journey li > span {
+  box-shadow: 0 0 0 5px var(--bs-paper-raised);
+}
+
+.create-journey li.is-active > span {
+  border-color: var(--bs-accent-strong);
+  color: #fff;
+  background: var(--bs-accent-strong);
+}
+
+.create-journey li.is-active strong {
+  color: var(--bs-ink-strong);
+  font-weight: 790;
+}
+
+.create-journey li.is-complete > span {
+  border-color: rgb(36 95 73 / 26%);
+  color: var(--bs-accent-strong);
+  background: var(--bs-accent-soft);
+}
+
+.create-journey li.is-complete strong {
+  color: #5f7168;
+}
+
+/* Once the Record panel exists, visually advance the create journey to step 2. */
+.workspace:has(.create-record-panel) .create-journey li:nth-child(1) > span {
+  border-color: rgb(36 95 73 / 26%);
+  color: var(--bs-accent-strong);
+  background: var(--bs-accent-soft);
+}
+
+.workspace:has(.create-record-panel) .create-journey li:nth-child(1) strong {
+  color: #5f7168;
+  font-weight: 690;
+}
+
+.workspace:has(.create-record-panel) .create-journey li:nth-child(2) > span {
+  border-color: var(--bs-accent-strong);
+  color: #fff;
+  background: var(--bs-accent-strong);
+}
+
+.workspace:has(.create-record-panel) .create-journey li:nth-child(2) strong {
+  color: var(--bs-ink-strong);
+  font-weight: 790;
+}
+
+/* File type is one disclosure, not a disclosure plus a duplicated field label. */
+.preparation-options {
+  display: grid;
+  gap: 10px;
+  padding-top: 2px;
+  border-top: 1px solid var(--bs-line);
+}
+
+.preparation-options summary {
+  padding: 10px 0 4px;
+}
+
+.preparation-option-select {
+  width: 100%;
+  min-height: 46px;
+  padding: 9px 12px;
+  border: 1px solid var(--bs-line-strong);
+  border-radius: var(--bs-radius-sm);
+  color: var(--bs-ink);
+  background: #fffefb;
+  font: inherit;
+}
+
+.preparation-option-select:focus {
+  border-color: rgb(36 95 73 / 48%);
+  outline: 3px solid rgb(36 95 73 / 8%);
+  outline-offset: 1px;
+}
+
+/* Verification: one task card, details secondary. */
+.verify-entry-panel,
+.verify-main-panel,
+.verify-help-panel,
+.verify-record-details,
+.verify-boundary-note,
+.verify-status {
+  width: min(100%, 760px);
+  margin-inline: auto;
+}
+
+.verify-entry-panel,
+.verify-main-panel {
+  border-color: var(--bs-line-strong);
+  background: var(--bs-paper-raised);
+  box-shadow: 0 16px 40px rgb(22 45 37 / 5%);
+}
+
+.verify-package-field input[type="file"],
+.verify-file-field input[type="file"] {
+  min-height: 92px;
+  padding: 22px 16px;
+  border: 1px dashed rgb(36 95 73 / 36%);
+  border-radius: var(--bs-radius-md);
+  background: #f8faf7;
+}
+
+.verify-help-panel,
+.verify-record-details {
+  margin-top: 14px;
+  padding: 0;
+  overflow: hidden;
+  border-color: var(--bs-line);
+  border-radius: var(--bs-radius-md);
+  background: rgb(255 253 248 / 42%);
+  box-shadow: none;
+}
+
+.verify-help-panel > summary,
+.verify-record-details > summary {
+  padding: 13px 16px;
+  color: var(--bs-muted);
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 760;
+  list-style: none;
+}
+
+.verify-help-panel > summary::-webkit-details-marker,
+.verify-record-details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.verify-help-panel > summary::after,
+.verify-record-details > summary::after {
+  float: right;
+  color: #829087;
+  content: "+";
+  font-size: 1rem;
+}
+
+.verify-help-panel[open] > summary::after,
+.verify-record-details[open] > summary::after {
+  content: "−";
+}
+
+.verify-help-panel[open],
+.verify-record-details[open] {
+  padding-bottom: 16px;
+}
+
+.verify-help-panel[open] > *:not(summary),
+.verify-record-details[open] > *:not(summary) {
+  margin-inline: 16px;
+}
+
+.verify-info-ready {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  gap: 10px 14px;
+  align-items: center;
+  padding: 13px 14px;
+  border: 1px solid rgb(36 95 73 / 14%);
+  border-radius: var(--bs-radius-sm);
+  background: var(--bs-accent-soft);
+}
+
+.verify-info-ready > span {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  background: var(--bs-accent-strong);
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.verify-info-ready strong {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--bs-accent-strong);
+}
+
+.verify-info-ready p {
+  margin: 0;
+  color: #5a6e64;
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.verify-file-action {
+  width: 100%;
+  min-height: 50px;
+}
+
+.verify-result-details {
+  margin-top: 4px;
+}
+
+.verify-boundary-note {
+  margin-top: 16px;
+  margin-bottom: 0;
+  color: #78857f;
+  font-size: 0.76rem;
+  line-height: 1.6;
+}
+
+.verify-status {
+  margin-top: 8px;
+}
+
+/* Home: deliberately collapse earlier so tablet/mobile never inherit the desktop composition. */
+@media (max-width: 920px) {
+  .hero {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 36px;
+    padding-block: 56px 72px;
+  }
+
+  .hero > * {
+    min-width: 0;
+  }
+
+  .hero h1 {
+    max-width: 760px;
+  }
+
+  .preview {
+    width: 100%;
+    max-width: none;
+  }
+
+  .use-case-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .use-case-grid article {
+    padding: 26px 0;
+  }
+
+  .use-case-grid article + article {
+    padding-left: 0;
+    border-top: 1px solid var(--bs-line);
+    border-left: 0;
+  }
+}
+
+@media (max-width: 620px) {
+  .hero {
+    gap: 30px;
+    padding-block: 46px 60px;
+  }
+
+  .hero h1 {
+    max-width: 100%;
+    font-size: clamp(2.65rem, 13.5vw, 4rem);
+    line-height: 0.98;
+  }
+
+  .hero .lede {
+    font-size: 0.98rem;
+    line-height: 1.65;
+  }
+
+  .hero .actions {
+    display: grid;
+    width: 100%;
+  }
+
+  .hero .actions .button-link {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .preview {
+    padding: 22px 18px 20px;
+  }
+
+  .create-journey::before {
+    right: 16%;
+    left: 16%;
+  }
+
+  .create-journey strong {
+    width: min-content;
+    min-width: 72px;
+    padding-inline: 4px;
+  }
+
+  .verify-info-ready {
+    grid-template-columns: 30px minmax(0, 1fr);
+  }
+
+  .verify-info-ready > button {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  .verify-package-field input[type="file"],
+  .verify-file-field input[type="file"] {
+    min-height: 82px;
+  }
+}
