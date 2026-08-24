@@ -1,4 +1,5 @@
 import { useI18n } from "../../i18n-context";
+import { clearLatestCreatedVerificationPackage } from "../../local-package";
 import { getDeployment } from "../../lib/deployment";
 import { getBaseNetwork } from "../../lib/networks";
 import type { VerificationPackage } from "../../lib/verification-package";
@@ -31,6 +32,11 @@ export function CreateSuccessPanel({
   onToggleQr
 }: CreateSuccessPanelProperties) {
   const { t } = useI18n();
+
+  function startNewRecord(): void {
+    clearLatestCreatedVerificationPackage();
+    window.location.replace("/create");
+  }
 
   return (
     <section className="panel create-success-panel">
@@ -90,6 +96,14 @@ export function CreateSuccessPanel({
                 <path d="M3 16.5h14" />
               </svg>
               <span>{t("create.downloadPackage")}</span>
+            </button>
+            <button
+              type="button"
+              className="success-download-action"
+              onClick={startNewRecord}
+            >
+              <span aria-hidden="true">＋</span>
+              <span>{t("home.createCta")}</span>
             </button>
           </div>
         </div>
