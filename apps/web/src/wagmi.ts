@@ -9,8 +9,8 @@ export const queryClient = new QueryClient();
 export const wagmiConfig = createConfig({
   chains: [base, baseSepolia],
   connectors: [
-    baseAccount({ appName: "BaseStamp" }),
-    injected({ shimDisconnect: true })
+    injected({ shimDisconnect: true }),
+    baseAccount({ appName: "BaseStamp" })
   ],
   multiInjectedProviderDiscovery: false,
   transports: {
