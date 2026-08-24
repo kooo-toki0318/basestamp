@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { useI18n } from "../i18n-context";
-import { HandoffStory } from "../components/HandoffStory";
 import { cacheVerificationPackage } from "../local-package";
 import { createStampPath } from "../lib/routes";
 import {
@@ -14,9 +13,7 @@ export function VerifyStartPage() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (window.location.hash !== "#verify-json") {
-      return;
-    }
+    if (window.location.hash !== "#verify-json") return;
 
     const frame = window.requestAnimationFrame(() => {
       document
@@ -48,7 +45,6 @@ export function VerifyStartPage() {
       );
 
       cacheVerificationPackage(package_);
-
       window.location.assign(
         createStampPath(package_.chainId, package_.stampId)
       );
@@ -70,36 +66,30 @@ export function VerifyStartPage() {
         <p className="lede">{t("verifyStart.lede")}</p>
       </div>
 
-      <HandoffStory compact activeRole="verify" />
+      <section id="verify-json" className="panel">
+        <span className="step-label">{t("verifyStart.step1")}</span>
+        <label className="field">
+          <span>{t("verifyStart.fileLabel")}</span>
+          <input
+            type="file"
+            accept="application/json,.json"
+            onChange={(event) =>
+              void beginVerification(event.target.files?.[0])
+            }
+            disabled={busy}
+          />
+        </label>
+        <p className="muted">{t("verifyStart.saltNotice")}</p>
+      </section>
 
-      <div className="handoff-grid">
-        <section id="verify-json" className="panel">
-          <span className="step-label">{t("verifyStart.step1")}</span>
-          <label className="field">
-            <span>{t("verifyStart.fileLabel")}</span>
-            <input
-              type="file"
-              accept="application/json,.json"
-              onChange={(event) =>
-                void beginVerification(event.target.files?.[0])
-              }
-              disabled={busy}
-            />
-          </label>
-          <p className="muted">{t("verifyStart.saltNotice")}</p>
-        </section>
-
-        <section className="panel">
-          <span className="step-label">
-            {t("verifyStart.needsTitle")}
-          </span>
-          <ol className="handoff-list">
-            <li>{t("verifyStart.need1")}</li>
-            <li>{t("verifyStart.need2")}</li>
-            <li>{t("verifyStart.need3")}</li>
-          </ol>
-        </section>
-      </div>
+      <details className="panel">
+        <summary>{t("verifyStart.needsTitle")}</summary>
+        <ol className="handoff-list">
+          <li>{t("verifyStart.need1")}</li>
+          <li>{t("verifyStart.need2")}</li>
+          <li>{t("verifyStart.need3")}</li>
+        </ol>
+      </details>
 
       <p
         className="status prominent"
