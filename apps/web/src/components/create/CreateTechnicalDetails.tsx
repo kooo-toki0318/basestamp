@@ -26,8 +26,14 @@ export function CreateTechnicalDetails({
   const { locale, t } = useI18n();
 
   return (
-    <details className="panel">
-      <summary className="step-label">{t("create.step2")}</summary>
+    <details className="panel create-technical-disclosure">
+      <summary>{t("create.step2")}</summary>
+
+      <div className="create-public-record-note">
+        <strong>{t("create.warningTitle")}</strong>
+        <p>{t("create.warning")}</p>
+      </div>
+
       {prepared === undefined ? (
         <p className="muted">{t("create.reviewEmpty")}</p>
       ) : (
@@ -58,6 +64,7 @@ export function CreateTechnicalDetails({
           </div>
         </dl>
       )}
+
       <p className="muted">{t("create.saltWarning")}</p>
     </details>
   );
