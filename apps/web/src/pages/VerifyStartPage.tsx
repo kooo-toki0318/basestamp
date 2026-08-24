@@ -70,6 +70,22 @@ export function VerifyStartPage() {
         <p className="lede">{t("verifyStart.lede")}</p>
       </div>
 
+      {showStatus && (
+        <div
+          className={
+            "verify-status feedback-status" +
+            (busy ? " is-busy" : "") +
+            (statusIsError ? " is-error" : "")
+          }
+          role={statusIsError ? "alert" : "status"}
+          aria-live={statusIsError ? "assertive" : "polite"}
+          aria-atomic="true"
+        >
+          <span className="feedback-status-dot" aria-hidden="true" />
+          <p>{status}</p>
+        </div>
+      )}
+
       <section id="verify-json" className="panel verify-entry-panel">
         <ol className="create-journey verify-journey" aria-label={t("verifyStart.needsTitle")}>
           <li className="is-active">
@@ -109,22 +125,6 @@ export function VerifyStartPage() {
           <li>{t("verifyStart.need3")}</li>
         </ol>
       </details>
-
-      {showStatus && (
-        <div
-          className={
-            "verify-status feedback-status" +
-            (busy ? " is-busy" : "") +
-            (statusIsError ? " is-error" : "")
-          }
-          role={statusIsError ? "alert" : "status"}
-          aria-live={statusIsError ? "assertive" : "polite"}
-          aria-atomic="true"
-        >
-          <span className="feedback-status-dot" aria-hidden="true" />
-          <p>{status}</p>
-        </div>
-      )}
     </section>
   );
 }
