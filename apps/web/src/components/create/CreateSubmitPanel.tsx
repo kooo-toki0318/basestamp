@@ -7,7 +7,7 @@ import type {
 import { useI18n } from "../../i18n-context";
 import { getDeployment } from "../../lib/deployment";
 import type { SupportedChainId } from "../../lib/networks";
-import { TurnstileWidget } from "../TurnstileWidget";
+import { CreateSponsorshipControls } from "./CreateSponsorshipControls";
 
 type PendingSubmission = {
   chainId: SupportedChainId;
@@ -75,11 +75,13 @@ export function CreateSubmitPanel({
       aria-busy={confirmationState === "confirming"}
     >
       <span className="step-label">{t("create.step3")}</span>
+
       {!registryAvailable && (
         <p className="muted">
           {t("create.mainnetUnavailable", { network: selectedNetworkName })}
         </p>
       )}
+
       {registryAvailable &&
         pendingConfirmation === undefined &&
         !readyToRecord && (
@@ -92,6 +94,7 @@ export function CreateSubmitPanel({
             )}
           </p>
         )}
+
       {pendingConfirmation !== undefined && (
         <>
           {confirmationState === "confirming" && (
@@ -118,114 +121,29 @@ export function CreateSubmitPanel({
           )}
         </>
       )}
+
       {sponsorshipConfigured &&
         pendingConfirmation === undefined &&
         preparedAvailable &&
-        readyToRecord && (
-          <div className="sponsor-choice">
-            {sponsorshipCapabilityChecking ? (
-              <>
-                <div>
-                  <strong>{t("create.sponsorCapabilityCheckingTitle")}</strong>
-                  <p>{t("create.sponsorCapabilityCheckingBody")}</p>
-                </div>
-                <div className="sponsor-capability-progress" role="status">
-                  <span
-                    className="confirmation-spinner compact"
-                    aria-hidden="true"
-                  />
-                  <span>{t("create.sponsorCapabilityCheckingStatus")}</span>
-                </div>
-                {walletFeeChosen ? (
-                  <p className="sponsor-wallet-paid">
-                    {t("create.walletFeeSelected")}
-                  </p>
-                ) : (
-                  <button
-                    type="button"
-                    className="secondary sponsor-choice-action"
-                    onClick={onChooseWalletFee}
-                    disabled={busy}
-                  >
-                    {t("create.useWalletFee")}
-                  </button>
-                )}
-              </>
-            ) : sponsorshipCapabilityUnavailable ? (
-              <>
-                <div>
-                  <strong>{t("create.sponsorCapabilityUnavailableTitle")}</strong>
-                  <p>{t("create.sponsorCapabilityUnavailableBody")}</p>
-                </div>
-                {walletFeeChosen ? (
-                  <p className="sponsor-wallet-paid">
-                    {t("create.walletFeeSelected")}
-                  </p>
-                ) : (
-                  <button
-                    type="button"
-                    className="secondary sponsor-choice-action"
-                    onClick={onChooseWalletFee}
-                    disabled={busy}
-                  >
-                    {t("create.useWalletFee")}
-                  </button>
-                )}
-              </>
-            ) : (
-              <>
-                <div>
-                  <strong>{t("create.sponsorTitle")}</strong>
-                  <p>{t("create.sponsorIntro")}</p>
-                </div>
-                {fundingMode === "sponsored" ? (
-                  <>
-                    {!sponsorGrantReady && turnstileSiteKey !== undefined ? (
-                      <TurnstileWidget
-                        accessibleLabel={t("create.sponsorCheckLabel")}
-                        onError={onTurnstileError}
-                        onTokenChange={onTurnstileTokenChange}
-                        resetKey={turnstileResetKey}
-                        siteKey={turnstileSiteKey}
-                      />
-                    ) : (
-                      <p className="sponsor-ready" role="status">
-                        {t("create.sponsorReady")}
-                      </p>
-                    )}
-                    {sponsorFailure !== undefined && (
-                      <p className="sponsor-error" role="alert">
-                        {sponsorFailure}
-                      </p>
-                    )}
-                    <button
-                      type="button"
-                      className="secondary sponsor-choice-action"
-                      onClick={onChooseWalletFee}
-                      disabled={busy}
-                    >
-                      {t("create.useWalletFee")}
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <p className="sponsor-wallet-paid">
-                      {t("create.walletFeeSelected")}
-                    </p>
-                    <button
-                      type="button"
-                      className="secondary sponsor-choice-action"
-                      onClick={onRetrySponsor}
-                      disabled={busy}
-                    >
-                      {t("create.trySponsor")}
-                    </button>
-                  </>
-                )}
-              </>
-            )}
-          </div>
+        readyToRecord &&
+        turnstileSiteKey !== undefined && (
+          <CreateSponsorshipControls
+            busy={busy}
+            fundingMode={fundingMode}
+            sponsorFailure={sponsorFailure}
+            sponsorGrantReady={sponsorGrantReady}
+            sponsorshipCapabilityChecking={sponsorshipCapabilityChecking}
+            sponsorshipCapabilityUnavailable={sponsorshipCapabilityUnavailable}
+            turnstileSiteKey={turnstileSiteKey}
+            turnstileResetKey={turnstileResetKey}
+            walletFeeChosen={walletFeeChosen}
+            onChooseWalletFee={onChooseWalletFee}
+            onRetrySponsor={onRetrySponsor}
+            onTurnstileError={onTurnstileError}
+            onTurnstileTokenChange={onTurnstileTokenChange}
+          />
         )}
+
       <button
         type="button"
         className={
@@ -269,6 +187,7 @@ export function CreateSubmitPanel({
               )
             : t("create.retryConfirmation")}
       </button>
+
       <p className="muted">
         {registryAvailable
           ? sponsorshipCapabilityChecking && !walletFeeChosen
