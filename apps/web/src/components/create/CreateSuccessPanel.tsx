@@ -64,14 +64,32 @@ export function CreateSuccessPanel({
             </span>
           </button>
 
-          <div className="success-secondary-actions">
+          <div className="success-action-row">
             {webShareAvailable && (
-              <button type="button" onClick={onShare}>
-                {t("create.webShare")}
+              <button
+                type="button"
+                className="secondary success-share-action"
+                onClick={onShare}
+              >
+                <svg viewBox="0 0 20 20" aria-hidden="true">
+                  <path d="M10 13.5V3" />
+                  <path d="m6.5 6.5 3.5-3.5 3.5 3.5" />
+                  <path d="M5 9.5H3.5A1.5 1.5 0 0 0 2 11v4.5A1.5 1.5 0 0 0 3.5 17h13a1.5 1.5 0 0 0 1.5-1.5V11a1.5 1.5 0 0 0-1.5-1.5H15" />
+                </svg>
+                <span>{t("create.webShare")}</span>
               </button>
             )}
-            <button type="button" className="secondary" onClick={onDownload}>
-              {t("create.downloadPackage")}
+            <button
+              type="button"
+              className="success-download-action"
+              onClick={onDownload}
+            >
+              <svg viewBox="0 0 20 20" aria-hidden="true">
+                <path d="M10 3v9" />
+                <path d="m6.5 9 3.5 3.5L13.5 9" />
+                <path d="M3 16.5h14" />
+              </svg>
+              <span>{t("create.downloadPackage")}</span>
             </button>
           </div>
         </div>
@@ -79,80 +97,99 @@ export function CreateSuccessPanel({
         <details className="success-details">
           <summary>{t("create.openDetails")}</summary>
 
-          <div className="result-transaction">
-            <span>
-              {t("create.transactionHash", {
-                network: getBaseNetwork(package_.chainId).name
-              })}
-            </span>
-            <a
-              href={
-                getDeployment(package_.chainId).explorerUrl +
-                "/tx/" +
-                package_.transactionHash
-              }
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <code>{package_.transactionHash}</code>
-              <span aria-hidden="true">↗</span>
-            </a>
-          </div>
+          <div className="success-details-body">
+            <section className="success-detail-section">
+              <div className="result-transaction">
+                <span>
+                  {t("create.transactionHash", {
+                    network: getBaseNetwork(package_.chainId).name
+                  })}
+                </span>
+                <a
+                  href={
+                    getDeployment(package_.chainId).explorerUrl +
+                    "/tx/" +
+                    package_.transactionHash
+                  }
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <code>{package_.transactionHash}</code>
+                  <span aria-hidden="true">↗</span>
+                </a>
+              </div>
+            </section>
 
-          <span className="share-label">{t("create.handoffUrl")}</span>
-          <div className="share-url-row">
-            <a href={handoffUrl} target="_blank" rel="noopener noreferrer">
-              {handoffUrl}
-            </a>
-            <button
-              type="button"
-              className="icon-button copy-share"
-              aria-label={t("create.copyUrl")}
-              title={t("create.copyUrl")}
-              onClick={onCopyUrl}
-            >
-              <svg viewBox="0 0 20 20" aria-hidden="true">
-                <rect x="6.5" y="6.5" width="9" height="9" rx="1.5" />
-                <path d="M4.5 13.5h-1A1.5 1.5 0 0 1 2 12V3.5A1.5 1.5 0 0 1 3.5 2H12a1.5 1.5 0 0 1 1.5 1.5v1" />
-              </svg>
-            </button>
-          </div>
+            <section className="success-detail-section">
+              <span className="share-label">{t("create.handoffUrl")}</span>
+              <div className="share-url-row">
+                <a href={handoffUrl} target="_blank" rel="noopener noreferrer">
+                  {handoffUrl}
+                </a>
+                <button
+                  type="button"
+                  className="icon-button copy-share"
+                  aria-label={t("create.copyUrl")}
+                  title={t("create.copyUrl")}
+                  onClick={onCopyUrl}
+                >
+                  <svg viewBox="0 0 20 20" aria-hidden="true">
+                    <rect x="6.5" y="6.5" width="9" height="9" rx="1.5" />
+                    <path d="M4.5 13.5h-1A1.5 1.5 0 0 1 2 12V3.5A1.5 1.5 0 0 1 3.5 2H12a1.5 1.5 0 0 1 1.5 1.5v1" />
+                  </svg>
+                </button>
+              </div>
+            </section>
 
-          <span className="share-label">{t("create.shareMessageLabel")}</span>
-          <p className="share-message">{shareMessage}</p>
-          <button
-            type="button"
-            className="secondary"
-            onClick={onCopyShareMessage}
-          >
-            {t("create.copyShareMessage")}
-          </button>
+            <section className="success-detail-section success-message-section">
+              <span className="share-label">{t("create.shareMessageLabel")}</span>
+              <div className="success-message-card">
+                <p className="share-message">{shareMessage}</p>
+                <button
+                  type="button"
+                  className="secondary success-message-copy"
+                  onClick={onCopyShareMessage}
+                >
+                  {t("create.copyShareMessage")}
+                </button>
+              </div>
+            </section>
 
-          <div className="share-secondary-actions standalone-share-actions">
-            <button
-              type="button"
-              onClick={onToggleQr}
-              aria-expanded={showShareQr}
-              aria-controls="create-handoff-qr"
-            >
-              {t(showShareQr ? "create.hideQr" : "create.showQr")}
-            </button>
-          </div>
+            <div className="success-detail-utility-row">
+              <button
+                type="button"
+                className="secondary success-utility-action"
+                onClick={onToggleQr}
+                aria-expanded={showShareQr}
+                aria-controls="create-handoff-qr"
+              >
+                <svg viewBox="0 0 20 20" aria-hidden="true">
+                  <rect x="2.5" y="2.5" width="5" height="5" rx="0.5" />
+                  <rect x="12.5" y="2.5" width="5" height="5" rx="0.5" />
+                  <rect x="2.5" y="12.5" width="5" height="5" rx="0.5" />
+                  <path d="M12.5 12.5h2v2h-2zM15.5 15.5h2v2h-2zM15.5 12.5h2" />
+                </svg>
+                <span>{t(showShareQr ? "create.hideQr" : "create.showQr")}</span>
+              </button>
 
-          {showShareQr && (
-            <div className="handoff-qr-panel" id="create-handoff-qr">
-              <QrCode value={handoffUrl} label={t("create.qrLabel")} />
-              <p>{t("create.qrWarning")}</p>
+              <a
+                className="success-utility-link"
+                href={package_.verificationUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <span>{t("nav.verify")}</span>
+                <span aria-hidden="true">↗</span>
+              </a>
             </div>
-          )}
 
-          <a
-            href={package_.verificationUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            {t("nav.verify")}
-          </a>
+            {showShareQr && (
+              <div className="handoff-qr-panel success-detail-qr" id="create-handoff-qr">
+                <QrCode value={handoffUrl} label={t("create.qrLabel")} />
+                <p>{t("create.qrWarning")}</p>
+              </div>
+            )}
+          </div>
         </details>
       </div>
     </section>
