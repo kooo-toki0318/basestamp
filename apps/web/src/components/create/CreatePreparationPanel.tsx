@@ -6,6 +6,7 @@ import {
   type ContentType,
   type Purpose
 } from "../../lib/metadata";
+import { CreateJourney } from "./CreateJourney";
 
 const PURPOSE_LABEL_KEYS = {
   deliverable: "metadata.purpose.deliverable",
@@ -20,6 +21,7 @@ type CreatePreparationPanelProperties = {
   contentType: ContentType;
   purpose: Purpose;
   busy: boolean;
+  activeStep: 1 | 2;
   onChooseFile: (file: File | undefined) => void;
   onContentTypeChange: (value: ContentType) => void;
   onPurposeChange: (value: Purpose) => void;
@@ -31,6 +33,7 @@ export function CreatePreparationPanel({
   contentType,
   purpose,
   busy,
+  activeStep,
   onChooseFile,
   onContentTypeChange,
   onPurposeChange,
@@ -40,20 +43,7 @@ export function CreatePreparationPanel({
 
   return (
     <section className="panel create-primary-panel">
-      <ol className="create-journey" aria-label={t("home.previewAria")}>
-        <li>
-          <span>1</span>
-          <strong>{t("create.step1")}</strong>
-        </li>
-        <li>
-          <span>2</span>
-          <strong>{t("create.step3")}</strong>
-        </li>
-        <li>
-          <span>3</span>
-          <strong>{t("create.shareTitle")}</strong>
-        </li>
-      </ol>
+      <CreateJourney activeStep={activeStep} />
 
       <span className="step-label">{t("create.step1")}</span>
       <label className="field create-file-field">
@@ -93,20 +83,19 @@ export function CreatePreparationPanel({
 
       <details className="preparation-options">
         <summary>{t("create.contentType")}</summary>
-        <label className="field">
-          <span>{t("create.contentType")}</span>
-          <select
-            value={contentType}
-            onChange={(event) => {
-              onContentTypeChange(event.target.value as ContentType);
-            }}
-            disabled={busy}
-          >
-            {CONTENT_TYPES.map((value) => (
-              <option key={value} value={value}>{value}</option>
-            ))}
-          </select>
-        </label>
+        <select
+          className="preparation-option-select"
+          aria-label={t("create.contentType")}
+          value={contentType}
+          onChange={(event) => {
+            onContentTypeChange(event.target.value as ContentType);
+          }}
+          disabled={busy}
+        >
+          {CONTENT_TYPES.map((value) => (
+            <option key={value} value={value}>{value}</option>
+          ))}
+        </select>
       </details>
 
       <button
