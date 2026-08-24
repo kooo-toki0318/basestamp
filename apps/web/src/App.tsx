@@ -49,20 +49,6 @@ type PersonalSignProvider = {
   }): Promise<unknown>;
 };
 
-type BaseSiweProvider = {
-  request(arguments_: {
-    method: "wallet_connect";
-    params: [
-      {
-        version: "1";
-        capabilities: {
-          signInWithEthereum: ReturnType<typeof createBaseSiweCapability>;
-        };
-      }
-    ];
-  }): Promise<unknown>;
-};
-
 type ChainProvider = {
   request(arguments_:
     | {
@@ -330,68 +316,28 @@ export function App() {
         let nonce: NonceResponse | undefined;
         let signedMessage: SignedSiweMessage | undefined;
 
-        if (connector.id === "baseAccount") {
-          // Always request a fresh nonce for Base Account SIWE. A new Base
-          // Account can return its ERC-6492 signature from the initial
-          // wallet_connect, without requiring an onchain setup transaction.
+        if (connector.id === "baseAccount" && !reuseConnection) {
+          // A brand-new Base Account connection can authenticate in the initial
+          // wallet_connect response. Keep this one-step path so ordinary web
+          // browsers do not connect and then immediately reconnect.
           nonce = await requestAuthNonce();
           const signInWithEthereum = createBaseSiweCapability(nonce);
-
-          if (!reuseConnection) {
-            // Connect and authenticate in one wallet_connect. This avoids the
-            // previous connect-then-connect-again flow that could surface the
-            // Base Account provisioning/setup UI before the user does a
-            // sponsored onchain action.
-            const connection = await connectAsync({
-              connector,
-              chainId: selectedChainId,
-              withCapabilities: true,
-              capabilities: {
-                signInWithEthereum
-              }
-            });
-            const parsed = readBaseSiweResponse(connection);
-            if (parsed === undefined) {
-              throw new Error(t("auth.invalidSignature"));
+          const connection = await connectAsync({
+            connector,
+            chainId: selectedChainId,
+            withCapabilities: true,
+            capabilities: {
+              signInWithEthereum
             }
-
-            account = parsed.address;
-            signedMessage = parsed.signedMessage;
-            connectedChainId = connection.chainId;
-          } else {
-            // Existing Base Account connections still authenticate with one
-            // fresh wallet_connect, because Wagmi connect() cannot be called
-            // again for an already-connected connector.
-            await ensureSelectedNetwork(connector);
-
-            const provider = (await connector.getProvider()) as
-              | BaseSiweProvider
-              | null
-              | undefined;
-            if (provider == null) {
-              throw new Error(t("auth.providerUnavailable"));
-            }
-
-            const result = await provider.request({
-              method: "wallet_connect",
-              params: [
-                {
-                  version: "1",
-                  capabilities: {
-                    signInWithEthereum
-                  }
-                }
-              ]
-            });
-            const parsed = readBaseSiweResponse(result);
-            if (parsed === undefined) {
-              throw new Error(t("auth.invalidSignature"));
-            }
-
-            account = parsed.address;
-            signedMessage = parsed.signedMessage;
-            connectedChainId = await readConnectorChainId(connector);
+          });
+          const parsed = readBaseSiweResponse(connection);
+          if (parsed === undefined) {
+            throw new Error(t("auth.invalidSignature"));
           }
+
+          account = parsed.address;
+          signedMessage = parsed.signedMessage;
+          connectedChainId = connection.chainId;
 
           if (connectedChainId !== selectedChainId) {
             throw new Error(
@@ -402,13 +348,16 @@ export function App() {
             );
           }
         } else if (reuseConnection) {
-          // Existing non-Base wallet connection.
+          // Once a wallet is already connected, authentication is only SIWE.
+          // In the Base App in-app browser, calling wallet_connect again can
+          // enter the EIP-7702 transaction-setup flow and show a network fee.
+          // personal_sign avoids that transaction setup and matches the Base
+          // App standard-web authentication path.
           account = address;
           connectedChainId =
             walletChainId ?? (await readConnectorChainId(connector));
         } else {
-          // New non-Base wallet connection. Browser-wallet behavior stays
-          // unchanged: connect first, then use standard personal_sign SIWE.
+          // Standard injected/browser wallet connection.
           const connection = await connectAsync({
             connector,
             chainId: selectedChainId
@@ -418,7 +367,6 @@ export function App() {
           connectedChainId = connection.chainId;
         }
 
-        // Non-Base wallets may still need to switch networks here.
         if (connectedChainId !== selectedChainId) {
           lastAutoSwitch.current =
             `${account}:${String(connectedChainId)}:${String(selectedChainId)}`;
@@ -426,15 +374,7 @@ export function App() {
           await ensureSelectedNetwork(connector);
         }
 
-        // Base Account must never silently fall back to personal_sign.
         if (signedMessage === undefined) {
-          if (connector.id === "baseAccount") {
-            throw new Error(
-              "Base Account did not return a SIWE signature."
-            );
-          }
-
-          // Standard browser-wallet SIWE flow.
           nonce ??= await requestAuthNonce();
 
           const message = createSiweMessage({
