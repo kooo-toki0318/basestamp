@@ -3,6 +3,7 @@ import {
   http,
   isAddressEqual,
   parseEventLogs,
+  type Address,
   type Hex,
   type PublicClient,
   type Transport
@@ -52,6 +53,13 @@ export function getDeploymentPublicClient(
   throw new Error("Unsupported BaseStamp deployment chain.");
 }
 
+export function filterLogsFromAddress<T extends { address: Address }>(
+  logs: readonly T[],
+  address: Address
+): T[] {
+  return logs.filter((log) => isAddressEqual(log.address, address));
+}
+
 export async function readRegistryStamp(
   stampId: Hex,
   deployment: Deployment = BASE_SEPOLIA_DEPLOYMENT
@@ -83,28 +91,15 @@ export async function verifyPackageOnchain(
 ): Promise<RegistryStamp> {
   const deployment = getDeployment(package_.chainId);
   const publicClient = getDeploymentPublicClient(deployment.chainId);
-  const [stamp, receipt, transaction] = await Promise.all([
+  const [stamp, receipt] = await Promise.all([
     readRegistryStamp(package_.stampId, deployment),
     publicClient.getTransactionReceipt({
-      hash: package_.transactionHash
-    }),
-    publicClient.getTransaction({
       hash: package_.transactionHash
     })
   ]);
 
   if (receipt.status !== "success") {
     throw new Error("The package transaction did not succeed.");
-  }
-  if (
-    transaction.to === null ||
-    !isAddressEqual(
-      transaction.to,
-      deployment.registryAddress
-    ) ||
-    transaction.value !== 0n
-  ) {
-    throw new Error("The package transaction does not target the Registry.");
   }
   if (receipt.blockNumber !== BigInt(package_.blockNumber)) {
     throw new Error("Transaction receipt does not match the package block.");
@@ -129,10 +124,15 @@ export async function verifyPackageOnchain(
     throw new Error("Registry state does not match the package.");
   }
 
+  // Wallet-paid transactions call the Registry directly, while Base Account
+  // sponsored calls are wrapped by smart-account/bundler infrastructure. The
+  // outer transaction target therefore is not a reliable proof of which
+  // contract executed the stamp call. Instead, require the canonical receipt
+  // to contain StampCreated emitted by the approved Registry itself.
   const events = parseEventLogs({
     abi: registryAbi,
     eventName: "StampCreated",
-    logs: receipt.logs,
+    logs: filterLogsFromAddress(receipt.logs, deployment.registryAddress),
     strict: true
   });
   const event = events.find(
