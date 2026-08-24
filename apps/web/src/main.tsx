@@ -8,6 +8,7 @@ import { I18nProvider } from "./i18n";
 import "./styles.css";
 import "./improvements.css";
 import "./ux-flow.css";
+import "./brand-polish.css";
 import "./information.css";
 import { queryClient, wagmiConfig } from "./wagmi";
 
