@@ -1,0 +1,175 @@
+/* Final pre-release polish: section rhythm, responsive header controls,
+   and consistent task feedback. Presentation only. */
+
+/* Home: a slightly whiter paper band separates use cases without introducing
+   another floating card style. */
+.use-cases-band {
+  border-block: 1px solid var(--bs-line);
+  background: #fbfaf6;
+}
+
+.use-cases-band .use-cases {
+  padding-block: clamp(64px, 8vw, 96px);
+}
+
+/* Header context controls: reserve enough desktop width for the complete
+   language name, but keep the controls shrinkable on narrow screens. */
+.context-controls {
+  grid-column: 2;
+  grid-template-columns: minmax(190px, 1.5fr) minmax(150px, 0.85fr);
+}
+
+.language-picker .setting-field {
+  min-width: 90px;
+}
+
+.language-picker .setting-select,
+.language-picker select {
+  min-width: 88px;
+}
+
+/* Authentication feedback is transient infrastructure, not permanent page
+   chrome. A connected wallet already communicates the successful state. */
+.auth-status.neutral,
+.auth-status.success {
+  display: none;
+}
+
+.auth-status.pending,
+.auth-status.error {
+  min-height: 48px;
+}
+
+/* Task feedback: one visual language across Create and Verify. */
+.operation-status,
+.feedback-status,
+.verify-file-page > p.verify-status {
+  width: min(100%, 760px);
+  min-height: 50px;
+  margin: 0 auto 16px;
+  padding: 12px 15px;
+  border: 1px solid var(--bs-line-strong);
+  border-radius: var(--bs-radius-sm);
+  color: #40564d;
+  background: #fbfaf6;
+  box-shadow: none;
+}
+
+.operation-status,
+.feedback-status {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr);
+  gap: 11px;
+  align-items: center;
+}
+
+.operation-status-dot,
+.feedback-status-dot,
+.verify-file-page > p.verify-status::before {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #7d8983;
+  content: "";
+}
+
+.operation-status div > span {
+  display: block;
+  margin-bottom: 2px;
+  color: #6d7c75;
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.operation-status p,
+.feedback-status p,
+.verify-file-page > p.verify-status {
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.operation-status p,
+.feedback-status p {
+  margin: 0;
+}
+
+.operation-status.is-busy,
+.feedback-status.is-busy {
+  border-color: rgb(49 95 123 / 24%);
+  color: #294e64;
+  background: var(--bs-blue-soft);
+}
+
+.operation-status.is-busy .operation-status-dot,
+.feedback-status.is-busy .feedback-status-dot {
+  background: var(--bs-blue);
+  animation: status-pulse 1.2s ease-in-out infinite;
+}
+
+.operation-status.is-success {
+  border-color: rgb(36 95 73 / 22%);
+  color: var(--bs-accent-strong);
+  background: var(--bs-accent-soft);
+}
+
+.operation-status.is-success .operation-status-dot {
+  background: var(--bs-accent);
+}
+
+.operation-status.is-error,
+.feedback-status.is-error {
+  border-color: rgb(139 61 54 / 24%);
+  color: #74362f;
+  background: var(--bs-danger-soft);
+}
+
+.operation-status.is-error .operation-status-dot,
+.feedback-status.is-error .feedback-status-dot {
+  background: var(--bs-danger);
+}
+
+/* Stamp verification still uses its legacy status node; make it visually
+   identical instead of leaving a thin line of text below the task. */
+.verify-file-page > p.verify-status {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr);
+  gap: 11px;
+  align-items: center;
+  color: #5d6c65;
+}
+
+.verify-file-page > p.verify-status::before {
+  display: block;
+}
+
+/* Once the explicit match/no-match card exists, it is the feedback surface. */
+.verify-file-page:has(.verification-result) > p.verify-status {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .context-controls {
+    grid-column: 1;
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 0.9fr);
+  }
+
+  .language-picker .setting-field,
+  .language-picker .setting-select,
+  .language-picker select {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 460px) {
+  .context-controls {
+    grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.9fr);
+  }
+
+  .operation-status,
+  .feedback-status,
+  .verify-file-page > p.verify-status {
+    padding: 11px 13px;
+  }
+}
