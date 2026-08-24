@@ -71,7 +71,7 @@ export function CreateSubmitPanel({
 
   return (
     <section
-      className="panel"
+      className="panel create-record-panel"
       aria-busy={confirmationState === "confirming"}
     >
       <span className="step-label">{t("create.step3")}</span>
@@ -85,7 +85,7 @@ export function CreateSubmitPanel({
       {registryAvailable &&
         pendingConfirmation === undefined &&
         !readyToRecord && (
-          <p className="muted">
+          <p className="muted create-record-hint">
             {t(
               walletState === "wrong-network"
                 ? "create.networkHint"
@@ -147,9 +147,10 @@ export function CreateSubmitPanel({
       <button
         type="button"
         className={
-          confirmationState === "confirming"
-            ? "confirmation-button is-confirming"
-            : undefined
+          "create-record-action" +
+          (confirmationState === "confirming"
+            ? " confirmation-button is-confirming"
+            : "")
         }
         onClick={onSubmit}
         disabled={
@@ -169,12 +170,7 @@ export function CreateSubmitPanel({
         {confirmationState === "idle"
           ? sponsorshipCapabilityChecking && !walletFeeChosen
             ? t("create.checkingSponsor")
-            : t(
-                fundingMode === "sponsored"
-                  ? "create.recordSponsored"
-                  : "create.recordOn",
-                { network: selectedNetworkName }
-              )
+            : t("create.recordOn", { network: selectedNetworkName })
           : confirmationState === "confirming"
             ? (
                 <span className="confirmation-button-content">
@@ -188,7 +184,7 @@ export function CreateSubmitPanel({
             : t("create.retryConfirmation")}
       </button>
 
-      <p className="muted">
+      <p className="muted create-fee-note">
         {registryAvailable
           ? sponsorshipCapabilityChecking && !walletFeeChosen
             ? t("create.sponsorCapabilityCheckingBody")
