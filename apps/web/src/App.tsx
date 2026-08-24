@@ -20,6 +20,7 @@ import { createSiweMessage } from "viem/siwe";
 import type { Session } from "./auth-types";
 import {
   createBaseSiweCapability,
+  readBaseSiweResponse,
   SIWE_STATEMENT,
   type NonceResponse,
   type SignedSiweMessage
@@ -60,17 +61,7 @@ type BaseSiweProvider = {
         };
       }
     ];
-  }): Promise<{
-    accounts: {
-      address: string;
-      capabilities?: {
-        signInWithEthereum?: {
-          message: string;
-          signature: string;
-        };
-      };
-    }[];
-  }>;
+  }): Promise<unknown>;
 };
 
 type ChainProvider = {
@@ -341,64 +332,67 @@ export function App() {
         let signedMessage: SignedSiweMessage | undefined;
 
         if (connector.id === "baseAccount") {
-          // Keep Wagmi connected for the rest of the app.
-          if (!reuseConnection) {
-            await connectAsync({
-              connector,
-              chainId: selectedChainId
-            });
-          }
-
-          // Base Account authentication must always happen on the
-          // currently selected Base network.
-          await ensureSelectedNetwork(connector);
-
-          // Always request a fresh nonce for Base Account SIWE.
+          // Always request a fresh nonce for Base Account SIWE. A new Base
+          // Account can return its ERC-6492 signature from the initial
+          // wallet_connect, without requiring an onchain setup transaction.
           nonce = await requestAuthNonce();
           const signInWithEthereum = createBaseSiweCapability(nonce);
 
-          const provider = (await connector.getProvider()) as
-            | BaseSiweProvider
-            | null
-            | undefined;
-
-          if (provider == null) {
-            throw new Error(t("auth.providerUnavailable"));
-          }
-
-          // Base Account authentication:
-          // wallet_connect + signInWithEthereum every time.
-          const result = await provider.request({
-            method: "wallet_connect",
-            params: [
-              {
-                version: "1",
-                capabilities: {
-                  signInWithEthereum
-                }
+          if (!reuseConnection) {
+            // Connect and authenticate in one wallet_connect. This avoids the
+            // previous connect-then-connect-again flow that could surface the
+            // Base Account provisioning/setup UI before the user does a
+            // sponsored onchain action.
+            const connection = await connectAsync({
+              connector,
+              chainId: selectedChainId,
+              withCapabilities: true,
+              capabilities: {
+                signInWithEthereum
               }
-            ]
-          });
+            });
+            const parsed = readBaseSiweResponse(connection);
+            if (parsed === undefined) {
+              throw new Error(t("auth.invalidSignature"));
+            }
 
-          const returnedAccount = result.accounts[0];
-          const siwe =
-            returnedAccount?.capabilities?.signInWithEthereum;
+            account = parsed.address;
+            signedMessage = parsed.signedMessage;
+            connectedChainId = connection.chainId;
+          } else {
+            // Existing Base Account connections still authenticate with one
+            // fresh wallet_connect, because Wagmi connect() cannot be called
+            // again for an already-connected connector.
+            await ensureSelectedNetwork(connector);
 
-          if (
-            returnedAccount === undefined ||
-            !isAddress(returnedAccount.address) ||
-            siwe === undefined ||
-            typeof siwe.message !== "string" ||
-            typeof siwe.signature !== "string" ||
-            !isHex(siwe.signature)
-          ) {
-            throw new Error(t("auth.invalidSignature"));
+            const provider = (await connector.getProvider()) as
+              | BaseSiweProvider
+              | null
+              | undefined;
+            if (provider == null) {
+              throw new Error(t("auth.providerUnavailable"));
+            }
+
+            const result = await provider.request({
+              method: "wallet_connect",
+              params: [
+                {
+                  version: "1",
+                  capabilities: {
+                    signInWithEthereum
+                  }
+                }
+              ]
+            });
+            const parsed = readBaseSiweResponse(result);
+            if (parsed === undefined) {
+              throw new Error(t("auth.invalidSignature"));
+            }
+
+            account = parsed.address;
+            signedMessage = parsed.signedMessage;
+            connectedChainId = await readConnectorChainId(connector);
           }
-
-          // Address, message and signature must all come from
-          // the same wallet_connect response.
-          account = returnedAccount.address;
-          connectedChainId = await readConnectorChainId(connector);
 
           if (connectedChainId !== selectedChainId) {
             throw new Error(
@@ -408,18 +402,14 @@ export function App() {
               })
             );
           }
-
-          signedMessage = {
-            message: siwe.message,
-            signature: siwe.signature
-          };
         } else if (reuseConnection) {
           // Existing non-Base wallet connection.
           account = address;
           connectedChainId =
             walletChainId ?? (await readConnectorChainId(connector));
         } else {
-          // New non-Base wallet connection.
+          // New non-Base wallet connection. Browser-wallet behavior stays
+          // unchanged: connect first, then use standard personal_sign SIWE.
           const connection = await connectAsync({
             connector,
             chainId: selectedChainId
