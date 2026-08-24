@@ -1,28 +1,105 @@
 /* Final UX corrections for the progressive flow branch.
-   Keep this layer small and reversible: layout/visual fixes only. */
+   Layout-only fixes that sit above the base and brand layers. */
 
-/* Create progress rail: keep the rule behind labels and make state legible. */
-.create-journey li,
-.create-journey li > span,
-.create-journey strong {
-  position: relative;
+/* Header controls must be allowed to shrink instead of overflowing. */
+.context-bar,
+.context-controls,
+.setting-picker,
+.setting-field,
+.setting-select {
+  min-width: 0;
 }
 
-.create-journey li > span,
-.create-journey strong {
-  z-index: 2;
+.context-bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
 }
 
-.create-journey strong {
-  display: inline-block;
-  width: fit-content;
+.context-controls {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.55fr) minmax(118px, 0.85fr);
+  gap: 8px;
+}
+
+.network-picker,
+.language-picker {
+  width: auto;
+  min-width: 0;
+}
+
+.network-picker select,
+.language-picker select {
+  width: 100%;
+  min-width: 0;
   max-width: 100%;
-  padding: 2px 6px;
-  background: var(--bs-paper-raised);
+}
+
+/* A stepper is always circle-over-line with its label below. This avoids the
+   desktop-only collision that happened when labels shared the rail row. */
+.create-journey {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  width: 100%;
+  padding: 0 0 4px;
+}
+
+.create-journey::before {
+  position: absolute;
+  z-index: 0;
+  top: 14px;
+  right: 16.666%;
+  left: 16.666%;
+  height: 1px;
+  background: var(--bs-line-strong);
+  content: "";
+}
+
+.create-journey li {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding-inline: 8px;
+  text-align: center;
+}
+
+.create-journey li + li::before {
+  display: none;
 }
 
 .create-journey li > span {
-  box-shadow: 0 0 0 5px var(--bs-paper-raised);
+  position: relative;
+  z-index: 2;
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 1px solid var(--bs-accent);
+  border-radius: 50%;
+  color: var(--bs-accent-strong);
+  background: var(--bs-paper-raised);
+  box-shadow: 0 0 0 6px var(--bs-paper-raised);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.66rem;
+}
+
+.create-journey strong {
+  position: relative;
+  z-index: 2;
+  display: block;
+  max-width: 100%;
+  padding: 0;
+  color: #65756d;
+  background: transparent;
+  font-size: 0.72rem;
+  font-weight: 690;
+  line-height: 1.3;
 }
 
 .create-journey li.is-active > span {
@@ -46,11 +123,81 @@
   color: #5f7168;
 }
 
-/* Once the Record panel exists, visually advance the create journey to step 2. */
+/* The preparation card actually transitions into Record state. Continue and
+   the editable preparation fields disappear; a compact file summary remains. */
+.create-prepare-form {
+  display: grid;
+  gap: 20px;
+}
+
+.create-prepared-summary {
+  display: none;
+}
+
+.workspace:has(.create-record-panel) .create-prepare-form {
+  display: none;
+}
+
+.workspace:has(.create-record-panel) .create-prepared-summary {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-top: 18px;
+  border-top: 1px solid var(--bs-line);
+}
+
+.create-prepared-copy {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.create-prepared-copy > span {
+  color: #78857f;
+  font-size: 0.68rem;
+  font-weight: 760;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.create-prepared-copy > strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--bs-ink-strong);
+  font-size: 0.94rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.create-prepared-copy > small {
+  color: var(--bs-muted);
+  font-size: 0.76rem;
+}
+
+.create-change-file {
+  flex: 0 0 auto;
+}
+
+/* Once Record exists, the visible journey advances to step 2 even though the
+   same preparation component owns the shared stepper. */
 .workspace:has(.create-record-panel) .create-journey li:nth-child(1) > span {
   border-color: rgb(36 95 73 / 26%);
   color: var(--bs-accent-strong);
   background: var(--bs-accent-soft);
+}
+
+.workspace:has(.create-record-panel) .create-journey li:nth-child(1) > span::before {
+  content: "✓";
+}
+
+.workspace:has(.create-record-panel) .create-journey li:nth-child(1) > span {
+  font-size: 0;
+}
+
+.workspace:has(.create-record-panel) .create-journey li:nth-child(1) > span::before {
+  font-size: 0.66rem;
 }
 
 .workspace:has(.create-record-panel) .create-journey li:nth-child(1) strong {
@@ -67,6 +214,44 @@
 .workspace:has(.create-record-panel) .create-journey li:nth-child(2) strong {
   color: var(--bs-ink-strong);
   font-weight: 790;
+}
+
+/* Record state reads as one changing workspace rather than a new card appended
+   below the old one. */
+.workspace:has(.create-record-panel) .handoff-grid {
+  display: block;
+  width: min(100%, 760px);
+  margin-inline: auto;
+}
+
+.workspace:has(.create-record-panel) .create-primary-panel {
+  width: 100%;
+  margin: 0;
+  border-bottom: 0;
+  border-radius: var(--bs-radius-lg) var(--bs-radius-lg) 0 0;
+  box-shadow: none;
+}
+
+.workspace:has(.create-record-panel) .create-technical-disclosure {
+  display: none;
+}
+
+.workspace:has(.create-record-panel) .auth-readiness,
+.workspace:has(.create-record-panel) .authentication-prompt {
+  width: min(100%, 760px);
+  margin: 0 auto;
+  border-top: 1px solid var(--bs-line);
+  border-bottom: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.workspace:has(.create-record-panel) .create-record-panel {
+  width: min(100%, 760px);
+  margin: 0 auto;
+  border-top: 1px solid var(--bs-line);
+  border-radius: 0 0 var(--bs-radius-lg) var(--bs-radius-lg);
+  box-shadow: 0 18px 44px rgb(22 45 37 / 5%);
 }
 
 /* File type is one disclosure, not a disclosure plus a duplicated field label. */
@@ -231,7 +416,8 @@
   margin-top: 8px;
 }
 
-/* Home: deliberately collapse earlier so tablet/mobile never inherit the desktop composition. */
+/* Home deliberately collapses earlier so tablet/mobile never inherit the
+   desktop composition. */
 @media (max-width: 920px) {
   .hero {
     grid-template-columns: minmax(0, 1fr);
@@ -267,6 +453,22 @@
   }
 }
 
+@media (max-width: 760px) {
+  .context-bar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .context-controls {
+    width: 100%;
+    grid-template-columns: minmax(0, 1.45fr) minmax(0, 0.9fr);
+  }
+
+  .setting-picker {
+    width: 100%;
+    padding-inline: 9px;
+  }
+}
+
 @media (max-width: 620px) {
   .hero {
     gap: 30px;
@@ -298,15 +500,16 @@
     padding: 22px 18px 20px;
   }
 
-  .create-journey::before {
-    right: 16%;
-    left: 16%;
+  .create-journey li {
+    padding-inline: 3px;
   }
 
   .create-journey strong {
-    width: min-content;
-    min-width: 72px;
-    padding-inline: 4px;
+    font-size: 0.65rem;
+  }
+
+  .create-prepared-summary {
+    align-items: flex-start;
   }
 
   .verify-info-ready {
@@ -321,5 +524,36 @@
   .verify-package-field input[type="file"],
   .verify-file-field input[type="file"] {
     min-height: 82px;
+  }
+}
+
+@media (max-width: 460px) {
+  .context-controls {
+    grid-template-columns: minmax(0, 1.3fr) minmax(0, 0.85fr);
+  }
+
+  .context-controls .setting-icon {
+    display: none;
+  }
+
+  .setting-picker {
+    min-height: 46px;
+    padding-inline: 10px;
+  }
+
+  .setting-label {
+    font-size: 0.56rem;
+  }
+
+  .setting-select select {
+    font-size: 0.72rem;
+  }
+
+  .create-prepared-summary {
+    display: grid;
+  }
+
+  .create-change-file {
+    width: 100%;
   }
 }
