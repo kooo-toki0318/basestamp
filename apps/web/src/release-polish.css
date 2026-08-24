@@ -138,7 +138,7 @@
 }
 
 /* Stamp verification uses the same feedback slot as Create: heading, feedback,
-   then the main task card. Reordering here avoids touching verification logic. */
+   then the main task card. */
 .verify-file-page {
   display: flex;
   flex-direction: column;
@@ -178,6 +178,188 @@
   display: none;
 }
 
+/* Success actions: one dominant action, then intentionally quieter helpers. */
+.success-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.success-share-action,
+.success-download-action,
+.success-utility-action {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-shadow: none;
+}
+
+.success-share-action svg,
+.success-download-action svg,
+.success-utility-action svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentcolor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.5;
+}
+
+.success-share-action {
+  min-height: 40px;
+  padding: 8px 13px;
+  border-color: var(--bs-line-strong);
+  color: var(--bs-accent-strong);
+  background: var(--bs-paper-raised);
+}
+
+.success-share-action:hover:not(:disabled) {
+  border-color: rgb(36 95 73 / 34%);
+  color: var(--bs-accent-strong);
+  background: var(--bs-accent-soft);
+  box-shadow: none;
+  transform: none;
+}
+
+.success-download-action {
+  min-height: 40px;
+  padding: 8px 10px;
+  border-color: transparent;
+  color: #65766e;
+  background: transparent;
+}
+
+.success-download-action:hover:not(:disabled) {
+  border-color: transparent;
+  color: var(--bs-accent-strong);
+  background: rgb(36 95 73 / 6%);
+  box-shadow: none;
+  transform: none;
+}
+
+/* Details read as one structured surface instead of scattered controls. */
+.success-details {
+  display: block;
+  margin-top: 18px;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--bs-line);
+  border-radius: var(--bs-radius-md);
+  background: rgb(255 253 248 / 52%);
+}
+
+.success-details > summary {
+  padding: 14px 16px;
+  color: #596b63;
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 760;
+}
+
+.success-details[open] {
+  padding-bottom: 0;
+}
+
+.success-details[open] > summary {
+  border-bottom: 1px solid var(--bs-line);
+}
+
+.success-details-body {
+  display: grid;
+}
+
+.success-detail-section {
+  display: grid;
+  gap: 9px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--bs-line);
+}
+
+.success-detail-section .result-transaction {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.success-detail-section .share-url-row {
+  margin: 0;
+}
+
+.success-message-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+  padding: 13px;
+  border: 1px solid var(--bs-line);
+  border-radius: var(--bs-radius-sm);
+  background: var(--bs-paper-raised);
+}
+
+.success-message-card .share-message {
+  margin: 0;
+  color: #42574e;
+  line-height: 1.55;
+}
+
+.success-message-copy {
+  min-height: 36px;
+  padding: 7px 10px;
+  white-space: nowrap;
+}
+
+.success-detail-utility-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 13px 18px;
+  background: var(--bs-paper-soft);
+}
+
+.success-utility-action {
+  min-height: 36px;
+  padding: 7px 10px;
+  border-color: var(--bs-line-strong);
+  color: #53675e;
+  background: var(--bs-paper-raised);
+}
+
+.success-utility-action:hover:not(:disabled) {
+  color: var(--bs-accent-strong);
+  background: var(--bs-accent-soft);
+  box-shadow: none;
+  transform: none;
+}
+
+.success-utility-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+  color: var(--bs-accent-strong);
+  font-size: 0.78rem;
+  font-weight: 720;
+  text-decoration: none;
+}
+
+.success-utility-link:hover {
+  text-decoration: underline;
+}
+
+.success-detail-qr {
+  margin: 0;
+  padding: 18px;
+  border-top: 1px solid var(--bs-line);
+  background: var(--bs-paper-raised);
+}
+
 @media (max-width: 920px) {
   .hero {
     padding-top: 54px;
@@ -196,6 +378,14 @@
   .language-picker select {
     min-width: 0;
   }
+
+  .success-message-card {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .success-message-copy {
+    justify-self: start;
+  }
 }
 
 @media (max-width: 460px) {
@@ -207,5 +397,22 @@
   .feedback-status,
   .verify-file-page > p.verify-status {
     padding: 11px 13px;
+  }
+
+  .success-action-row {
+    align-items: stretch;
+  }
+
+  .success-share-action,
+  .success-download-action {
+    flex: 1 1 auto;
+  }
+
+  .success-detail-utility-row {
+    flex-wrap: wrap;
+  }
+
+  .success-utility-link {
+    margin-left: 0;
   }
 }
