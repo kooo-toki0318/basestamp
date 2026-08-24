@@ -32,29 +32,31 @@ export function HomePage() {
         </aside>
       </section>
 
-      <section className="shell use-cases" aria-labelledby="use-cases-heading">
-        <div className="section-heading compact-heading">
-          <p className="eyebrow">{t("home.useCasesEyebrow")}</p>
-          <h2 id="use-cases-heading">{t("home.useCasesTitle")}</h2>
+      <section className="use-cases-band">
+        <div className="shell use-cases" aria-labelledby="use-cases-heading">
+          <div className="section-heading compact-heading">
+            <p className="eyebrow">{t("home.useCasesEyebrow")}</p>
+            <h2 id="use-cases-heading">{t("home.useCasesTitle")}</h2>
+          </div>
+          <div className="use-case-grid">
+            <article>
+              <span aria-hidden="true">01</span>
+              <h3>{t("home.useCase1Title")}</h3>
+              <p>{t("home.useCase1Body")}</p>
+            </article>
+            <article>
+              <span aria-hidden="true">02</span>
+              <h3>{t("home.useCase2Title")}</h3>
+              <p>{t("home.useCase2Body")}</p>
+            </article>
+            <article>
+              <span aria-hidden="true">03</span>
+              <h3>{t("home.useCase3Title")}</h3>
+              <p>{t("home.useCase3Body")}</p>
+            </article>
+          </div>
+          <p className="proof-boundary">{t("home.proofBoundary")}</p>
         </div>
-        <div className="use-case-grid">
-          <article>
-            <span aria-hidden="true">01</span>
-            <h3>{t("home.useCase1Title")}</h3>
-            <p>{t("home.useCase1Body")}</p>
-          </article>
-          <article>
-            <span aria-hidden="true">02</span>
-            <h3>{t("home.useCase2Title")}</h3>
-            <p>{t("home.useCase2Body")}</p>
-          </article>
-          <article>
-            <span aria-hidden="true">03</span>
-            <h3>{t("home.useCase3Title")}</h3>
-            <p>{t("home.useCase3Body")}</p>
-          </article>
-        </div>
-        <p className="proof-boundary">{t("home.proofBoundary")}</p>
       </section>
     </>
   );
