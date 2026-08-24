@@ -12,20 +12,27 @@
   padding-block: clamp(64px, 8vw, 96px);
 }
 
+/* Match the hero's starting rhythm to the task pages. The bottom can remain
+   roomier so the landing page still breathes. */
+.hero {
+  padding-top: clamp(54px, 7vw, 88px);
+  padding-bottom: clamp(64px, 8vw, 104px);
+}
+
 /* Header context controls: reserve enough desktop width for the complete
    language name, but keep the controls shrinkable on narrow screens. */
 .context-controls {
   grid-column: 2;
-  grid-template-columns: minmax(190px, 1.5fr) minmax(150px, 0.85fr);
+  grid-template-columns: minmax(190px, 1.5fr) minmax(170px, 0.9fr);
 }
 
 .language-picker .setting-field {
-  min-width: 90px;
+  min-width: 104px;
 }
 
 .language-picker .setting-select,
 .language-picker select {
-  min-width: 88px;
+  min-width: 100px;
 }
 
 /* Authentication feedback is transient infrastructure, not permanent page
@@ -130,14 +137,36 @@
   background: var(--bs-danger);
 }
 
-/* Stamp verification still uses its legacy status node; make it visually
-   identical instead of leaving a thin line of text below the task. */
+/* Stamp verification uses the same feedback slot as Create: heading, feedback,
+   then the main task card. Reordering here avoids touching verification logic. */
+.verify-file-page {
+  display: flex;
+  flex-direction: column;
+}
+
+.verify-file-page > .workspace-heading {
+  order: 0;
+}
+
 .verify-file-page > p.verify-status {
+  order: 1;
   display: grid;
   grid-template-columns: 10px minmax(0, 1fr);
   gap: 11px;
   align-items: center;
   color: #5d6c65;
+}
+
+.verify-file-page > .verify-main-panel {
+  order: 2;
+}
+
+.verify-file-page > .verify-record-details {
+  order: 3;
+}
+
+.verify-file-page > .verify-boundary-note {
+  order: 4;
 }
 
 .verify-file-page > p.verify-status::before {
@@ -147,6 +176,13 @@
 /* Once the explicit match/no-match card exists, it is the feedback surface. */
 .verify-file-page:has(.verification-result) > p.verify-status {
   display: none;
+}
+
+@media (max-width: 920px) {
+  .hero {
+    padding-top: 54px;
+    padding-bottom: 72px;
+  }
 }
 
 @media (max-width: 760px) {
