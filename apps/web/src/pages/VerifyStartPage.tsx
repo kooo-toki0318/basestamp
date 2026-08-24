@@ -59,16 +59,31 @@ export function VerifyStartPage() {
   }
 
   return (
-    <section className="shell workspace">
+    <section className="shell workspace verify-start-page">
       <div className="workspace-heading">
         <p className="eyebrow">{t("verifyStart.eyebrow")}</p>
         <h1>{t("verifyStart.title")}</h1>
         <p className="lede">{t("verifyStart.lede")}</p>
       </div>
 
-      <section id="verify-json" className="panel">
+      <section id="verify-json" className="panel verify-entry-panel">
+        <ol className="create-journey verify-journey" aria-label={t("verifyStart.needsTitle")}>
+          <li className="is-active">
+            <span>1</span>
+            <strong>{t("verifyStart.step1")}</strong>
+          </li>
+          <li>
+            <span>2</span>
+            <strong>{t("stamp.step3")}</strong>
+          </li>
+          <li>
+            <span>3</span>
+            <strong>{t("stamp.resultSummary")}</strong>
+          </li>
+        </ol>
+
         <span className="step-label">{t("verifyStart.step1")}</span>
-        <label className="field">
+        <label className="field verify-package-field">
           <span>{t("verifyStart.fileLabel")}</span>
           <input
             type="file"
@@ -82,7 +97,7 @@ export function VerifyStartPage() {
         <p className="muted">{t("verifyStart.saltNotice")}</p>
       </section>
 
-      <details className="panel">
+      <details className="panel verify-help-panel">
         <summary>{t("verifyStart.needsTitle")}</summary>
         <ol className="handoff-list">
           <li>{t("verifyStart.need1")}</li>
@@ -92,7 +107,7 @@ export function VerifyStartPage() {
       </details>
 
       <p
-        className="status prominent"
+        className="status prominent verify-status"
         role="status"
         aria-live="polite"
       >
