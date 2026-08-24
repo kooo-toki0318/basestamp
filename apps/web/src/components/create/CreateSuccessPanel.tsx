@@ -3,6 +3,7 @@ import { getDeployment } from "../../lib/deployment";
 import { getBaseNetwork } from "../../lib/networks";
 import type { VerificationPackage } from "../../lib/verification-package";
 import { QrCode } from "../QrCode";
+import { CreateJourney } from "./CreateJourney";
 
 type CreateSuccessPanelProperties = {
   package_: VerificationPackage;
@@ -33,6 +34,8 @@ export function CreateSuccessPanel({
 
   return (
     <section className="panel create-success-panel">
+      <CreateJourney activeStep={3} />
+
       <div className="result-box completed-result">
         <div className="result-heading">
           <span className="result-check" aria-hidden="true">✓</span>
