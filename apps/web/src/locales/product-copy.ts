@@ -5,8 +5,8 @@ export const productCopy = {
   en: {
     "app.description": "Record a file on Base without uploading the original. Verify it later with a private link.",
     "home.eyebrow": "Private file verification",
-    "home.title": "Record a file on Base — without uploading it.",
-    "home.lede": "Create a record before you send a file. Later, the recipient can check the file locally with a private verification link.",
+    "home.title": "Record a file now. Verify it later.",
+    "home.lede": "Create a record on Base so you or a recipient can later check that a file matches the version you recorded — without uploading the file itself.",
     "home.createCta": "Record a file",
     "home.verifyCta": "Verify a file",
     "home.previewAria": "How BaseStamp works",
@@ -116,8 +116,8 @@ export const productCopy = {
   ja: {
     "app.description": "元ファイルをアップロードせずにBaseへ記録し、あとからプライベートリンクで確認できます。",
     "home.eyebrow": "ファイルを安全に確認",
-    "home.title": "ファイルをアップロードせず、Baseに記録する。",
-    "home.lede": "送る前にファイルを記録しておけば、受け取った人はプライベートな確認リンクを使って、そのファイルが記録時と同じかローカルで確認できます。",
+    "home.title": "今のファイルを記録して、あとで同じものか確認する。",
+    "home.lede": "Baseに記録を残しておけば、自分や受け取った相手があとからファイルを確認できます。元のファイル自体はBaseStampにアップロードされません。",
     "home.createCta": "ファイルを記録する",
     "home.verifyCta": "ファイルを確認する",
     "home.previewAria": "BaseStampの使い方",
