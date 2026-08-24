@@ -1,8 +1,8 @@
 import { useI18n } from "../i18n-context";
-import { HandoffStory } from "../components/HandoffStory";
 
 export function HomePage() {
   const { t } = useI18n();
+
   return (
     <>
       <section className="shell hero">
@@ -31,57 +31,31 @@ export function HomePage() {
           <p>{t("home.legalBoundary")}</p>
         </aside>
       </section>
-      <HandoffStory />
 
-      <section className="shell use-cases" aria-labelledby="use-cases-heading">
-        <div className="section-heading compact-heading">
-          <p className="eyebrow">{t("home.useCasesEyebrow")}</p>
-          <h2 id="use-cases-heading">{t("home.useCasesTitle")}</h2>
-        </div>
-        <div className="use-case-grid">
-          <article>
-            <span aria-hidden="true">01</span>
-            <h3>{t("home.useCase1Title")}</h3>
-            <p>{t("home.useCase1Body")}</p>
-          </article>
-          <article>
-            <span aria-hidden="true">02</span>
-            <h3>{t("home.useCase2Title")}</h3>
-            <p>{t("home.useCase2Body")}</p>
-          </article>
-          <article>
-            <span aria-hidden="true">03</span>
-            <h3>{t("home.useCase3Title")}</h3>
-            <p>{t("home.useCase3Body")}</p>
-          </article>
-        </div>
-        <p className="proof-boundary">{t("home.proofBoundary")}</p>
-      </section>
-
-      <section className="technical-story">
-        <div className="shell">
-          <div className="section-heading technical-heading">
-            <p className="eyebrow">{t("home.technicalEyebrow")}</p>
-            <h2>{t("home.technicalTitle")}</h2>
-            <p>{t("home.technicalIntro")}</p>
+      <section className="use-cases-band">
+        <div className="shell use-cases" aria-labelledby="use-cases-heading">
+          <div className="section-heading compact-heading">
+            <p className="eyebrow">{t("home.useCasesEyebrow")}</p>
+            <h2 id="use-cases-heading">{t("home.useCasesTitle")}</h2>
           </div>
-        </div>
-        <div className="shell principles">
-          <article>
-            <p className="number">01</p>
-            <h3>{t("home.principle1Title")}</h3>
-            <p>{t("home.principle1Body")}</p>
-          </article>
-          <article>
-            <p className="number">02</p>
-            <h3>{t("home.principle2Title")}</h3>
-            <p>{t("home.principle2Body")}</p>
-          </article>
-          <article>
-            <p className="number">03</p>
-            <h3>{t("home.principle3Title")}</h3>
-            <p>{t("home.principle3Body")}</p>
-          </article>
+          <div className="use-case-grid">
+            <article>
+              <span aria-hidden="true">01</span>
+              <h3>{t("home.useCase1Title")}</h3>
+              <p>{t("home.useCase1Body")}</p>
+            </article>
+            <article>
+              <span aria-hidden="true">02</span>
+              <h3>{t("home.useCase2Title")}</h3>
+              <p>{t("home.useCase2Body")}</p>
+            </article>
+            <article>
+              <span aria-hidden="true">03</span>
+              <h3>{t("home.useCase3Title")}</h3>
+              <p>{t("home.useCase3Body")}</p>
+            </article>
+          </div>
+          <p className="proof-boundary">{t("home.proofBoundary")}</p>
         </div>
       </section>
     </>

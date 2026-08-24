@@ -1,0 +1,553 @@
+/* Final UX corrections for the progressive flow branch.
+   Layout-only fixes that sit above the base and brand layers. */
+
+/* Header controls must be allowed to shrink instead of overflowing. */
+.context-bar,
+.context-controls,
+.setting-picker,
+.setting-field,
+.setting-select {
+  min-width: 0;
+}
+
+.context-bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
+}
+
+.context-controls {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.55fr) minmax(118px, 0.85fr);
+  gap: 8px;
+}
+
+.network-picker,
+.language-picker {
+  width: auto;
+  min-width: 0;
+}
+
+.network-picker select,
+.language-picker select {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* A stepper is always circle-over-line with its label below. This avoids the
+   desktop-only collision that happened when labels shared the rail row. */
+.create-journey {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  width: 100%;
+  padding: 0 0 4px;
+}
+
+.create-journey::before {
+  position: absolute;
+  z-index: 0;
+  top: 14px;
+  right: 16.666%;
+  left: 16.666%;
+  height: 1px;
+  background: var(--bs-line-strong);
+  content: "";
+}
+
+.create-journey li {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding-inline: 8px;
+  text-align: center;
+}
+
+.create-journey li + li::before {
+  display: none;
+}
+
+.create-journey li > span {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 1px solid var(--bs-accent);
+  border-radius: 50%;
+  color: var(--bs-accent-strong);
+  background: var(--bs-paper-raised);
+  box-shadow: 0 0 0 6px var(--bs-paper-raised);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.66rem;
+}
+
+.create-journey strong {
+  position: relative;
+  z-index: 2;
+  display: block;
+  max-width: 100%;
+  padding: 0;
+  color: #65756d;
+  background: transparent;
+  font-size: 0.72rem;
+  font-weight: 690;
+  line-height: 1.3;
+}
+
+.create-journey li.is-active > span {
+  border-color: var(--bs-accent-strong);
+  color: #fff;
+  background: var(--bs-accent-strong);
+}
+
+.create-journey li.is-active strong {
+  color: var(--bs-ink-strong);
+  font-weight: 790;
+}
+
+.create-journey li.is-complete > span {
+  border-color: rgb(36 95 73 / 26%);
+  color: var(--bs-accent-strong);
+  background: var(--bs-accent-soft);
+}
+
+.create-journey li.is-complete strong {
+  color: #5f7168;
+}
+
+/* The preparation card actually transitions into Record state. Continue and
+   the editable preparation fields disappear; a compact file summary remains. */
+.create-prepare-form {
+  display: grid;
+  gap: 20px;
+}
+
+.create-prepared-summary {
+  display: none;
+}
+
+.workspace:has(.create-record-panel) .create-prepare-form {
+  display: none;
+}
+
+.workspace:has(.create-record-panel) .create-prepared-summary {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-top: 18px;
+  border-top: 1px solid var(--bs-line);
+}
+
+.create-prepared-copy {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.create-prepared-copy > span {
+  color: #78857f;
+  font-size: 0.68rem;
+  font-weight: 760;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.create-prepared-copy > strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--bs-ink-strong);
+  font-size: 0.94rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.create-prepared-copy > small {
+  color: var(--bs-muted);
+  font-size: 0.76rem;
+}
+
+.create-change-file {
+  flex: 0 0 auto;
+}
+
+/* Once Record exists, the visible journey advances to step 2 even though the
+   same preparation component owns the shared stepper. */
+.workspace:has(.create-record-panel) .create-journey li:nth-child(1) > span {
+  border-color: rgb(36 95 73 / 26%);
+  color: var(--bs-accent-strong);
+  background: var(--bs-accent-soft);
+  font-size: 0;
+}
+
+.workspace:has(.create-record-panel) .create-journey li:nth-child(1) > span::before {
+  content: "✓";
+  font-size: 0.66rem;
+}
+
+.workspace:has(.create-record-panel) .create-journey li:nth-child(1) strong {
+  color: #5f7168;
+  font-weight: 690;
+}
+
+.workspace:has(.create-record-panel) .create-journey li:nth-child(2) > span {
+  border-color: var(--bs-accent-strong);
+  color: #fff;
+  background: var(--bs-accent-strong);
+}
+
+.workspace:has(.create-record-panel) .create-journey li:nth-child(2) strong {
+  color: var(--bs-ink-strong);
+  font-weight: 790;
+}
+
+/* Record state reads as one changing workspace rather than a new card appended
+   below the old one. */
+.workspace:has(.create-record-panel) .handoff-grid {
+  display: block;
+  width: min(100%, 760px);
+  margin-inline: auto;
+}
+
+.workspace:has(.create-record-panel) .create-primary-panel {
+  width: 100%;
+  margin: 0;
+  border-bottom: 0;
+  border-radius: var(--bs-radius-lg) var(--bs-radius-lg) 0 0;
+  box-shadow: none;
+}
+
+.workspace:has(.create-record-panel) .create-technical-disclosure {
+  display: none;
+}
+
+.workspace:has(.create-record-panel) .auth-readiness,
+.workspace:has(.create-record-panel) .authentication-prompt {
+  width: min(100%, 760px);
+  margin: 0 auto;
+  border-top: 1px solid var(--bs-line);
+  border-bottom: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.workspace:has(.create-record-panel) .create-record-panel {
+  width: min(100%, 760px);
+  margin: 0 auto;
+  border-top: 1px solid var(--bs-line);
+  border-radius: 0 0 var(--bs-radius-lg) var(--bs-radius-lg);
+  box-shadow: 0 18px 44px rgb(22 45 37 / 5%);
+}
+
+/* File type is one disclosure, not a disclosure plus a duplicated field label. */
+.preparation-options {
+  display: grid;
+  gap: 10px;
+  padding-top: 2px;
+  border-top: 1px solid var(--bs-line);
+}
+
+.preparation-options summary {
+  padding: 10px 0 4px;
+}
+
+.preparation-option-select {
+  width: 100%;
+  min-height: 46px;
+  padding: 9px 12px;
+  border: 1px solid var(--bs-line-strong);
+  border-radius: var(--bs-radius-sm);
+  color: var(--bs-ink);
+  background: #fffefb;
+  font: inherit;
+}
+
+.preparation-option-select:focus {
+  border-color: rgb(36 95 73 / 48%);
+  outline: 3px solid rgb(36 95 73 / 8%);
+  outline-offset: 1px;
+}
+
+/* Verification: one task card, details secondary. */
+.verify-entry-panel,
+.verify-main-panel,
+.verify-help-panel,
+.verify-record-details,
+.verify-boundary-note,
+.verify-status {
+  width: min(100%, 760px);
+  margin-inline: auto;
+}
+
+.verify-entry-panel,
+.verify-main-panel {
+  border-color: var(--bs-line-strong);
+  background: var(--bs-paper-raised);
+  box-shadow: 0 16px 40px rgb(22 45 37 / 5%);
+}
+
+.verify-package-field input[type="file"],
+.verify-file-field input[type="file"] {
+  min-height: 92px;
+  padding: 22px 16px;
+  border: 1px dashed rgb(36 95 73 / 36%);
+  border-radius: var(--bs-radius-md);
+  background: #f8faf7;
+}
+
+.verify-help-panel,
+.verify-record-details {
+  margin-top: 14px;
+  padding: 0;
+  overflow: hidden;
+  border-color: var(--bs-line);
+  border-radius: var(--bs-radius-md);
+  background: rgb(255 253 248 / 42%);
+  box-shadow: none;
+}
+
+.verify-help-panel > summary,
+.verify-record-details > summary {
+  padding: 13px 16px;
+  color: var(--bs-muted);
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 760;
+  list-style: none;
+}
+
+.verify-help-panel > summary::-webkit-details-marker,
+.verify-record-details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.verify-help-panel > summary::after,
+.verify-record-details > summary::after {
+  float: right;
+  color: #829087;
+  content: "+";
+  font-size: 1rem;
+}
+
+.verify-help-panel[open] > summary::after,
+.verify-record-details[open] > summary::after {
+  content: "−";
+}
+
+.verify-help-panel[open],
+.verify-record-details[open] {
+  padding-bottom: 16px;
+}
+
+.verify-help-panel[open] > *:not(summary),
+.verify-record-details[open] > *:not(summary) {
+  margin-inline: 16px;
+}
+
+.verify-info-ready {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  gap: 10px 14px;
+  align-items: center;
+  padding: 13px 14px;
+  border: 1px solid rgb(36 95 73 / 14%);
+  border-radius: var(--bs-radius-sm);
+  background: var(--bs-accent-soft);
+}
+
+.verify-info-ready > span {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  background: var(--bs-accent-strong);
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.verify-info-ready strong {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--bs-accent-strong);
+}
+
+.verify-info-ready p {
+  margin: 0;
+  color: #5a6e64;
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.verify-file-action {
+  width: 100%;
+  min-height: 50px;
+}
+
+.verify-result-details {
+  margin-top: 4px;
+}
+
+.verify-boundary-note {
+  margin-top: 16px;
+  margin-bottom: 0;
+  color: #78857f;
+  font-size: 0.76rem;
+  line-height: 1.6;
+}
+
+.verify-status {
+  margin-top: 8px;
+}
+
+/* Home deliberately collapses earlier so tablet/mobile never inherit the
+   desktop composition. */
+@media (max-width: 920px) {
+  .hero {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 36px;
+    padding-block: 56px 72px;
+  }
+
+  .hero > * {
+    min-width: 0;
+  }
+
+  .hero h1 {
+    max-width: 760px;
+  }
+
+  .preview {
+    width: 100%;
+    max-width: none;
+  }
+
+  .use-case-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .use-case-grid article {
+    padding: 26px 0;
+  }
+
+  .use-case-grid article + article {
+    padding-left: 0;
+    border-top: 1px solid var(--bs-line);
+    border-left: 0;
+  }
+}
+
+@media (max-width: 760px) {
+  .context-bar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .context-controls {
+    width: 100%;
+    grid-template-columns: minmax(0, 1.45fr) minmax(0, 0.9fr);
+  }
+
+  .setting-picker {
+    width: 100%;
+    padding-inline: 9px;
+  }
+}
+
+@media (max-width: 620px) {
+  .hero {
+    gap: 30px;
+    padding-block: 46px 60px;
+  }
+
+  .hero h1 {
+    max-width: 100%;
+    font-size: clamp(2.65rem, 13.5vw, 4rem);
+    line-height: 0.98;
+  }
+
+  .hero .lede {
+    font-size: 0.98rem;
+    line-height: 1.65;
+  }
+
+  .hero .actions {
+    display: grid;
+    width: 100%;
+  }
+
+  .hero .actions .button-link {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .preview {
+    padding: 22px 18px 20px;
+  }
+
+  .create-journey li {
+    padding-inline: 3px;
+  }
+
+  .create-journey strong {
+    font-size: 0.65rem;
+  }
+
+  .workspace:has(.create-record-panel) .create-prepared-summary {
+    align-items: flex-start;
+  }
+
+  .verify-info-ready {
+    grid-template-columns: 30px minmax(0, 1fr);
+  }
+
+  .verify-info-ready > button {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  .verify-package-field input[type="file"],
+  .verify-file-field input[type="file"] {
+    min-height: 82px;
+  }
+}
+
+@media (max-width: 460px) {
+  .context-controls {
+    grid-template-columns: minmax(0, 1.3fr) minmax(0, 0.85fr);
+  }
+
+  .context-controls .setting-icon {
+    display: none;
+  }
+
+  .setting-picker {
+    min-height: 46px;
+    padding-inline: 10px;
+  }
+
+  .setting-label {
+    font-size: 0.56rem;
+  }
+
+  .setting-select select {
+    font-size: 0.72rem;
+  }
+
+  .workspace:has(.create-record-panel) .create-prepared-summary {
+    display: grid;
+  }
+
+  .create-change-file {
+    width: 100%;
+  }
+}

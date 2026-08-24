@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { useI18n } from "../i18n-context";
-import { HandoffStory } from "../components/HandoffStory";
 import { cacheVerificationPackage } from "../local-package";
 import { createStampPath } from "../lib/routes";
 import {
@@ -10,13 +9,12 @@ import {
 
 export function VerifyStartPage() {
   const { t } = useI18n();
-  const [status, setStatus] = useState(t("verifyStart.status.choose"));
+  const initialStatus = t("verifyStart.status.choose");
+  const [status, setStatus] = useState(initialStatus);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (window.location.hash !== "#verify-json") {
-      return;
-    }
+    if (window.location.hash !== "#verify-json") return;
 
     const frame = window.requestAnimationFrame(() => {
       document
@@ -48,7 +46,6 @@ export function VerifyStartPage() {
       );
 
       cacheVerificationPackage(package_);
-
       window.location.assign(
         createStampPath(package_.chainId, package_.stampId)
       );
@@ -62,52 +59,72 @@ export function VerifyStartPage() {
     }
   }
 
+  const showStatus = busy || status !== initialStatus;
+  const statusIsError = !busy && status !== initialStatus;
+
   return (
-    <section className="shell workspace">
+    <section className="shell workspace verify-start-page">
       <div className="workspace-heading">
         <p className="eyebrow">{t("verifyStart.eyebrow")}</p>
         <h1>{t("verifyStart.title")}</h1>
         <p className="lede">{t("verifyStart.lede")}</p>
       </div>
 
-      <HandoffStory compact activeRole="verify" />
+      {showStatus && (
+        <div
+          className={
+            "verify-status feedback-status" +
+            (busy ? " is-busy" : "") +
+            (statusIsError ? " is-error" : "")
+          }
+          role={statusIsError ? "alert" : "status"}
+          aria-live={statusIsError ? "assertive" : "polite"}
+          aria-atomic="true"
+        >
+          <span className="feedback-status-dot" aria-hidden="true" />
+          <p>{status}</p>
+        </div>
+      )}
 
-      <div className="handoff-grid">
-        <section id="verify-json" className="panel">
-          <span className="step-label">{t("verifyStart.step1")}</span>
-          <label className="field">
-            <span>{t("verifyStart.fileLabel")}</span>
-            <input
-              type="file"
-              accept="application/json,.json"
-              onChange={(event) =>
-                void beginVerification(event.target.files?.[0])
-              }
-              disabled={busy}
-            />
-          </label>
-          <p className="muted">{t("verifyStart.saltNotice")}</p>
-        </section>
+      <section id="verify-json" className="panel verify-entry-panel">
+        <ol className="create-journey verify-journey" aria-label={t("verifyStart.needsTitle")}>
+          <li className="is-active">
+            <span>1</span>
+            <strong>{t("verifyStart.step1")}</strong>
+          </li>
+          <li>
+            <span>2</span>
+            <strong>{t("stamp.step3")}</strong>
+          </li>
+          <li>
+            <span>3</span>
+            <strong>{t("stamp.resultSummary")}</strong>
+          </li>
+        </ol>
 
-        <section className="panel">
-          <span className="step-label">
-            {t("verifyStart.needsTitle")}
-          </span>
-          <ol className="handoff-list">
-            <li>{t("verifyStart.need1")}</li>
-            <li>{t("verifyStart.need2")}</li>
-            <li>{t("verifyStart.need3")}</li>
-          </ol>
-        </section>
-      </div>
+        <span className="step-label">{t("verifyStart.step1")}</span>
+        <label className="field verify-package-field">
+          <span>{t("verifyStart.fileLabel")}</span>
+          <input
+            type="file"
+            accept="application/json,.json"
+            onChange={(event) =>
+              void beginVerification(event.target.files?.[0])
+            }
+            disabled={busy}
+          />
+        </label>
+        <p className="muted">{t("verifyStart.saltNotice")}</p>
+      </section>
 
-      <p
-        className="status prominent"
-        role="status"
-        aria-live="polite"
-      >
-        {status}
-      </p>
+      <details className="panel verify-help-panel">
+        <summary>{t("verifyStart.needsTitle")}</summary>
+        <ol className="handoff-list">
+          <li>{t("verifyStart.need1")}</li>
+          <li>{t("verifyStart.need2")}</li>
+          <li>{t("verifyStart.need3")}</li>
+        </ol>
+      </details>
     </section>
   );
 }

@@ -1,0 +1,685 @@
+/* BaseStamp brand polish
+   Concept: a quiet verification ledger — paper, ink, fine rules, deliberate actions.
+   This layer only changes presentation. Product and transaction behavior stay intact. */
+
+:root {
+  --bs-paper: #f7f5ef;
+  --bs-paper-raised: #fffdf8;
+  --bs-paper-soft: #f1eee5;
+  --bs-ink: #18342a;
+  --bs-ink-strong: #10271f;
+  --bs-muted: #66766f;
+  --bs-line: rgb(24 52 42 / 13%);
+  --bs-line-strong: rgb(24 52 42 / 22%);
+  --bs-accent: #245f49;
+  --bs-accent-strong: #194b39;
+  --bs-accent-soft: #e4eee8;
+  --bs-warm: #8b6736;
+  --bs-warm-soft: #f5eddd;
+  --bs-blue: #315f7b;
+  --bs-blue-soft: #eaf1f5;
+  --bs-danger: #8b3d36;
+  --bs-danger-soft: #f7e9e7;
+  --bs-radius-sm: 10px;
+  --bs-radius-md: 14px;
+  --bs-radius-lg: 18px;
+  --bs-shadow-float: 0 22px 54px rgb(22 45 37 / 7%);
+}
+
+body {
+  color: var(--bs-ink);
+  background:
+    radial-gradient(circle at 86% 0%, rgb(209 226 216 / 42%), transparent 31rem),
+    linear-gradient(180deg, #faf8f2 0%, var(--bs-paper) 42%, #f3f0e8 100%);
+}
+
+/* Typography: editorial enough to feel durable, restrained enough to stay useful. */
+h1,
+.section-heading h2,
+.preview h2,
+.workspace h1 {
+  color: var(--bs-ink-strong);
+  text-wrap: balance;
+}
+
+h1 {
+  letter-spacing: -0.055em;
+  line-height: 0.97;
+}
+
+.lede,
+.section-heading > p:last-child {
+  color: #53665d;
+}
+
+.eyebrow,
+.preview-label,
+.step-label,
+.number {
+  color: var(--bs-accent);
+  letter-spacing: 0.105em;
+}
+
+/* Header: flatter and more architectural than a floating SaaS toolbar. */
+.nav {
+  min-height: 82px;
+  border-bottom-color: var(--bs-line);
+}
+
+.brand {
+  gap: 11px;
+  color: var(--bs-ink-strong);
+  font-weight: 790;
+}
+
+.brand img {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+}
+
+.nav-links a {
+  color: #4c6258;
+  font-weight: 680;
+}
+
+.nav-links a:hover {
+  color: var(--bs-accent-strong);
+}
+
+.context-bar {
+  gap: 8px;
+}
+
+.setting-picker,
+.auth-status {
+  border-color: var(--bs-line);
+  border-radius: var(--bs-radius-sm);
+  background: rgb(255 253 248 / 62%);
+  box-shadow: none;
+}
+
+.setting-picker:focus-within {
+  border-color: rgb(36 95 73 / 42%);
+  background: var(--bs-paper-raised);
+  box-shadow: 0 0 0 3px rgb(36 95 73 / 9%);
+}
+
+.setting-icon {
+  border-radius: 7px;
+  color: var(--bs-accent-strong);
+  background: var(--bs-accent-soft);
+}
+
+.wallet-identity {
+  border-color: var(--bs-line-strong);
+  border-radius: 999px;
+  background: rgb(255 253 248 / 72%);
+}
+
+/* Buttons: one shape, one hierarchy. No pill-heavy generic SaaS look. */
+button,
+.button-link {
+  min-height: 46px;
+  padding-inline: 20px;
+  border: 1px solid var(--bs-accent-strong);
+  border-radius: var(--bs-radius-sm);
+  color: #fbfffc;
+  background: var(--bs-accent-strong);
+  box-shadow: 0 7px 18px rgb(25 75 57 / 10%);
+  font-weight: 730;
+  transition:
+    transform 120ms ease,
+    border-color 120ms ease,
+    background 120ms ease,
+    box-shadow 120ms ease;
+}
+
+button:hover:not(:disabled),
+.button-link:hover {
+  background: #123f30;
+  box-shadow: 0 10px 24px rgb(25 75 57 / 14%);
+  transform: translateY(-1px);
+}
+
+button:active:not(:disabled),
+.button-link:active {
+  box-shadow: none;
+  transform: translateY(0);
+}
+
+button.secondary,
+.button-link.secondary {
+  border-color: var(--bs-line-strong);
+  color: var(--bs-accent-strong);
+  background: rgb(255 253 248 / 58%);
+  box-shadow: none;
+}
+
+button.secondary:hover:not(:disabled),
+.button-link.secondary:hover {
+  border-color: rgb(36 95 73 / 35%);
+  color: var(--bs-accent-strong);
+  background: var(--bs-accent-soft);
+  box-shadow: none;
+}
+
+button.icon-button {
+  box-shadow: none;
+  transform: none;
+}
+
+/* Home: fewer floating cards, stronger composition. */
+.hero {
+  grid-template-columns: minmax(0, 1.16fr) minmax(300px, 0.84fr);
+  gap: clamp(48px, 7vw, 96px);
+  padding-block: clamp(64px, 8vw, 112px);
+}
+
+.hero h1 {
+  max-width: 820px;
+  margin-bottom: 26px;
+  font-size: clamp(3.35rem, 6.6vw, 6.65rem);
+}
+
+.hero .lede {
+  max-width: 660px;
+}
+
+.hero .actions {
+  margin-top: 32px;
+}
+
+.preview {
+  position: relative;
+  padding: 30px 30px 28px;
+  border: 1px solid var(--bs-line-strong);
+  border-radius: var(--bs-radius-lg);
+  background:
+    linear-gradient(180deg, rgb(255 253 248 / 92%), rgb(248 246 239 / 78%));
+  box-shadow: var(--bs-shadow-float);
+}
+
+.preview::before {
+  position: absolute;
+  top: 0;
+  left: 28px;
+  width: 56px;
+  height: 3px;
+  background: var(--bs-accent);
+  content: "";
+}
+
+.preview h2 {
+  margin: 10px 0 24px;
+  font-size: 1.75rem;
+  letter-spacing: -0.035em;
+}
+
+.preview ol {
+  gap: 0;
+  counter-reset: bs-preview;
+}
+
+.preview li {
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 8px;
+  min-height: 64px;
+  padding: 14px 0;
+  border-bottom-color: var(--bs-line);
+}
+
+.preview li:first-child {
+  border-top: 1px solid var(--bs-line);
+}
+
+.preview li span {
+  color: #728078;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.68rem;
+  font-weight: 740;
+}
+
+.preview > p {
+  margin-top: 20px;
+  color: #708078;
+  font-size: 0.78rem;
+}
+
+.use-cases {
+  padding-block: clamp(64px, 8vw, 96px);
+}
+
+.use-case-grid {
+  border-block-color: var(--bs-line-strong);
+}
+
+.use-case-grid article + article {
+  border-left-color: var(--bs-line);
+}
+
+.use-case-grid article > span {
+  color: #718178;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.proof-boundary {
+  color: #75827c;
+}
+
+/* Workspaces: one clear content column, hairline hierarchy, shadows only where useful. */
+.workspace {
+  padding-block: clamp(54px, 7vw, 88px);
+}
+
+.workspace-heading {
+  max-width: 760px;
+  margin-bottom: 28px;
+}
+
+.workspace h1 {
+  margin-bottom: 18px;
+  font-size: clamp(2.9rem, 5.4vw, 5rem);
+}
+
+.panel {
+  gap: 17px;
+  padding: 24px;
+  border-color: var(--bs-line);
+  border-radius: var(--bs-radius-lg);
+  background: rgb(255 253 248 / 72%);
+  box-shadow: none;
+}
+
+.create-primary-panel,
+.create-record-panel,
+.create-success-panel,
+.handoff-file-card {
+  border-color: var(--bs-line-strong);
+  background: var(--bs-paper-raised);
+  box-shadow: 0 16px 40px rgb(22 45 37 / 5%);
+}
+
+/* Journey: read as a progress rail, not three badges floating in space. */
+.create-journey {
+  position: relative;
+  gap: 0;
+  padding-bottom: 4px;
+}
+
+.create-journey::before {
+  position: absolute;
+  z-index: 0;
+  top: 13px;
+  right: 12%;
+  left: 12%;
+  height: 1px;
+  background: var(--bs-line-strong);
+  content: "";
+}
+
+.create-journey li {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 8px;
+  padding-inline: 6px;
+  color: #748078;
+}
+
+.create-journey li + li::before {
+  display: none;
+}
+
+.create-journey li > span {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--bs-accent);
+  color: var(--bs-accent-strong);
+  background: var(--bs-paper-raised);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.66rem;
+  box-shadow: 0 0 0 5px var(--bs-paper-raised);
+}
+
+.create-journey li:first-child > span {
+  color: #fff;
+  background: var(--bs-accent-strong);
+}
+
+.create-journey strong {
+  align-self: center;
+  color: #65756d;
+  font-size: 0.72rem;
+  font-weight: 690;
+}
+
+.create-journey li:first-child strong {
+  color: var(--bs-ink);
+  font-weight: 790;
+}
+
+/* Inputs feel like form fields, not embedded cards. */
+.field {
+  gap: 7px;
+  color: #42574e;
+  font-size: 0.82rem;
+  font-weight: 690;
+}
+
+.field input,
+.field select {
+  min-height: 48px;
+  border-color: var(--bs-line-strong);
+  border-radius: var(--bs-radius-sm);
+  background: #fffefb;
+}
+
+.field input:focus,
+.field select:focus {
+  border-color: rgb(36 95 73 / 48%);
+  outline: 3px solid rgb(36 95 73 / 8%);
+  outline-offset: 1px;
+}
+
+.create-file-field input[type="file"] {
+  min-height: 92px;
+  padding: 22px 16px;
+  border: 1px dashed rgb(36 95 73 / 36%);
+  border-radius: var(--bs-radius-md);
+  background: #f8faf7;
+}
+
+.file-preview {
+  border-color: var(--bs-line);
+  border-radius: var(--bs-radius-md);
+  background: var(--bs-paper-soft);
+}
+
+/* Details disclosures: visually quiet until requested. */
+.preparation-options,
+.create-technical-disclosure,
+.success-details,
+.handoff-recheck-card {
+  color: var(--bs-muted);
+}
+
+.preparation-options summary,
+.create-technical-disclosure > summary,
+.success-details > summary,
+.handoff-recheck-card > summary {
+  list-style: none;
+}
+
+.preparation-options summary::-webkit-details-marker,
+.create-technical-disclosure > summary::-webkit-details-marker,
+.success-details > summary::-webkit-details-marker,
+.handoff-recheck-card > summary::-webkit-details-marker {
+  display: none;
+}
+
+.preparation-options summary::after,
+.create-technical-disclosure > summary::after,
+.success-details > summary::after,
+.handoff-recheck-card > summary::after {
+  float: right;
+  color: #829087;
+  content: "+";
+  font-size: 1rem;
+  font-weight: 500;
+}
+
+.preparation-options[open] summary::after,
+.create-technical-disclosure[open] > summary::after,
+.success-details[open] > summary::after,
+.handoff-recheck-card[open] > summary::after {
+  content: "−";
+}
+
+.create-technical-disclosure {
+  border-color: var(--bs-line);
+  border-radius: var(--bs-radius-md);
+  background: rgb(255 253 248 / 42%);
+}
+
+.create-technical-disclosure > summary {
+  padding: 13px 16px;
+}
+
+.create-public-record-note {
+  border-left-color: var(--bs-warm);
+  border-radius: 0 var(--bs-radius-sm) var(--bs-radius-sm) 0;
+  background: var(--bs-warm-soft);
+}
+
+.technical-list div {
+  border-bottom-color: var(--bs-line);
+}
+
+.technical-list dt {
+  color: #78847e;
+  letter-spacing: 0.04em;
+}
+
+/* Status: lightweight system feedback. */
+.operation-status {
+  grid-template-columns: 9px minmax(0, 1fr);
+  gap: 10px;
+  color: var(--bs-muted);
+}
+
+.operation-status-dot {
+  width: 7px;
+  height: 7px;
+  background: #8a9690;
+}
+
+.operation-status.is-busy .operation-status-dot {
+  background: var(--bs-blue);
+}
+
+.operation-status.is-success .operation-status-dot {
+  background: var(--bs-accent);
+}
+
+/* Access & gas: secondary infrastructure inside the Record step. */
+.auth-readiness,
+.authentication-prompt {
+  border: 1px solid var(--bs-line);
+  border-radius: var(--bs-radius-md);
+  box-shadow: none;
+}
+
+.auth-readiness {
+  background: var(--bs-accent-soft);
+}
+
+.authentication-prompt {
+  border-left: 3px solid var(--bs-blue);
+  background: var(--bs-blue-soft);
+}
+
+.authentication-prompt.network-prompt {
+  border-left-color: var(--bs-warm);
+  background: var(--bs-warm-soft);
+}
+
+.record-access-ready {
+  border: 1px solid rgb(36 95 73 / 13%);
+  border-radius: var(--bs-radius-sm);
+  background: var(--bs-accent-soft);
+}
+
+.gas-control {
+  border-color: var(--bs-line);
+  border-radius: var(--bs-radius-sm);
+  background: rgb(247 245 239 / 68%);
+}
+
+.gas-summary-row > strong {
+  color: var(--bs-accent-strong);
+}
+
+.confirmation-progress {
+  border-color: rgb(49 95 123 / 18%);
+  border-radius: var(--bs-radius-sm);
+  color: #294e64;
+  background: var(--bs-blue-soft);
+}
+
+/* Completion: make the share action feel definitive, not dashboard-like. */
+.create-success-panel {
+  padding: clamp(24px, 4vw, 34px);
+}
+
+.completed-result,
+.result-box {
+  background: transparent;
+}
+
+.result-heading {
+  gap: 12px;
+}
+
+.result-check {
+  width: 34px;
+  height: 34px;
+  background: var(--bs-accent-strong);
+}
+
+.success-lede {
+  max-width: 620px;
+  color: #50645b;
+}
+
+.share-panel {
+  border-top-color: var(--bs-line);
+}
+
+.share-primary-action {
+  border-color: var(--bs-accent-strong);
+  border-radius: var(--bs-radius-sm);
+  background: var(--bs-accent-strong);
+  box-shadow: 0 10px 24px rgb(25 75 57 / 12%);
+}
+
+.share-action-icon {
+  border-radius: 7px;
+  color: var(--bs-accent-strong);
+  background: #f5faf7;
+}
+
+.share-url-row,
+.share-secondary-actions,
+.result-transaction {
+  border-color: var(--bs-line);
+  border-radius: var(--bs-radius-sm);
+  background: #fbfaf6;
+}
+
+.result-transaction {
+  box-shadow: none;
+}
+
+.success-details {
+  border-top-color: var(--bs-line);
+}
+
+/* Recipient verification has one focal action and no blockchain-dashboard feel. */
+.handoff-drop-zone {
+  min-height: 184px;
+  border-color: rgb(36 95 73 / 34%);
+  border-radius: var(--bs-radius-md);
+  background: #f8faf7;
+}
+
+.handoff-drop-icon {
+  width: 36px;
+  height: 36px;
+  background: var(--bs-accent-strong);
+}
+
+.verification-result {
+  border: 1px solid transparent;
+  border-radius: var(--bs-radius-md);
+}
+
+.verification-result.success {
+  border-color: rgb(36 95 73 / 17%);
+  color: var(--bs-accent-strong);
+  background: var(--bs-accent-soft);
+}
+
+.verification-result.failure {
+  border-color: rgb(139 61 54 / 17%);
+  color: var(--bs-danger);
+  background: var(--bs-danger-soft);
+}
+
+.handoff-receipt-card,
+.handoff-share-card,
+.handoff-recheck-card {
+  border-color: var(--bs-line);
+  background: rgb(255 253 248 / 58%);
+}
+
+.notice {
+  border-color: var(--bs-line);
+  border-radius: var(--bs-radius-md);
+  background: rgb(255 253 248 / 64%);
+}
+
+.footer {
+  border-top-color: var(--bs-line);
+}
+
+@media (max-width: 760px) {
+  .hero {
+    gap: 40px;
+    padding-block: 54px 68px;
+  }
+
+  .hero h1 {
+    font-size: clamp(3rem, 15vw, 4.8rem);
+  }
+
+  .preview {
+    padding: 25px 22px 22px;
+    border-radius: var(--bs-radius-md);
+    box-shadow: 0 14px 34px rgb(22 45 37 / 5%);
+  }
+
+  .panel,
+  .create-success-panel,
+  .handoff-file-card {
+    padding: 20px;
+    border-radius: var(--bs-radius-md);
+  }
+
+  .create-journey::before {
+    right: 15%;
+    left: 15%;
+  }
+
+  .create-journey li {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    gap: 7px;
+    padding-inline: 2px;
+    text-align: center;
+  }
+
+  .create-journey li > span {
+    box-shadow: 0 0 0 4px var(--bs-paper-raised);
+  }
+
+  .create-journey strong {
+    font-size: 0.65rem;
+    line-height: 1.25;
+  }
+
+  .create-file-field input[type="file"] {
+    min-height: 82px;
+  }
+}
