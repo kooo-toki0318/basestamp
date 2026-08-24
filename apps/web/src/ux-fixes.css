@@ -186,17 +186,11 @@
   border-color: rgb(36 95 73 / 26%);
   color: var(--bs-accent-strong);
   background: var(--bs-accent-soft);
-}
-
-.workspace:has(.create-record-panel) .create-journey li:nth-child(1) > span::before {
-  content: "✓";
-}
-
-.workspace:has(.create-record-panel) .create-journey li:nth-child(1) > span {
   font-size: 0;
 }
 
 .workspace:has(.create-record-panel) .create-journey li:nth-child(1) > span::before {
+  content: "✓";
   font-size: 0.66rem;
 }
 
@@ -508,7 +502,7 @@
     font-size: 0.65rem;
   }
 
-  .create-prepared-summary {
+  .workspace:has(.create-record-panel) .create-prepared-summary {
     align-items: flex-start;
   }
 
@@ -549,7 +543,7 @@
     font-size: 0.72rem;
   }
 
-  .create-prepared-summary {
+  .workspace:has(.create-record-panel) .create-prepared-summary {
     display: grid;
   }
 
