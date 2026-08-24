@@ -18,10 +18,11 @@ import {
 import { enMessages, type MessageKey } from "./locales/en";
 import { jaMessages } from "./locales/ja";
 import { productCopy } from "./locales/product-copy";
+import { releaseCopy } from "./locales/release-copy";
 
 const catalogs: Record<Locale, Record<MessageKey, string>> = {
-  en: { ...enMessages, ...productCopy.en },
-  ja: { ...jaMessages, ...productCopy.ja }
+  en: { ...enMessages, ...productCopy.en, ...releaseCopy.en },
+  ja: { ...jaMessages, ...productCopy.ja, ...releaseCopy.ja }
 };
 const STORAGE_KEY = "basestamp.locale";
 
