@@ -21,7 +21,7 @@ type CreatePreparationPanelProperties = {
   contentType: ContentType;
   purpose: Purpose;
   busy: boolean;
-  activeStep: 1 | 2;
+  activeStep?: 1 | 2;
   onChooseFile: (file: File | undefined) => void;
   onContentTypeChange: (value: ContentType) => void;
   onPurposeChange: (value: Purpose) => void;
@@ -33,7 +33,7 @@ export function CreatePreparationPanel({
   contentType,
   purpose,
   busy,
-  activeStep,
+  activeStep = 1,
   onChooseFile,
   onContentTypeChange,
   onPurposeChange,
