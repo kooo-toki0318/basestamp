@@ -603,9 +603,7 @@ export function App() {
   } else if (path === "/create" || path === "/create/") {
     page = (
       <CreatePage
-        key={`${activeConnector?.id ?? "disconnected"}:${address ?? ""}:${String(
-          selectedChainId
-        )}`}
+        key={`create:${String(selectedChainId)}`}
         address={address}
         connectorId={activeConnector?.id}
         walletChainId={walletChainId}
@@ -729,7 +727,9 @@ export function App() {
                 >
                   {t("auth.switchTo", { network: selectedNetwork.name })}
                 </button>
-              ) : !authenticatedConnection && activeConnector !== undefined ? (
+              ) : sessionLoaded &&
+                !authenticatedConnection &&
+                activeConnector !== undefined ? (
                 <button
                   className={
                     authFeedback.tone === "error"
