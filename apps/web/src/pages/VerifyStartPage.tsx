@@ -9,7 +9,8 @@ import {
 
 export function VerifyStartPage() {
   const { t } = useI18n();
-  const [status, setStatus] = useState(t("verifyStart.status.choose"));
+  const initialStatus = t("verifyStart.status.choose");
+  const [status, setStatus] = useState(initialStatus);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -57,6 +58,9 @@ export function VerifyStartPage() {
       setBusy(false);
     }
   }
+
+  const showStatus = busy || status !== initialStatus;
+  const statusIsError = !busy && status !== initialStatus;
 
   return (
     <section className="shell workspace verify-start-page">
@@ -106,13 +110,21 @@ export function VerifyStartPage() {
         </ol>
       </details>
 
-      <p
-        className="status prominent verify-status"
-        role="status"
-        aria-live="polite"
-      >
-        {status}
-      </p>
+      {showStatus && (
+        <div
+          className={
+            "verify-status feedback-status" +
+            (busy ? " is-busy" : "") +
+            (statusIsError ? " is-error" : "")
+          }
+          role={statusIsError ? "alert" : "status"}
+          aria-live={statusIsError ? "assertive" : "polite"}
+          aria-atomic="true"
+        >
+          <span className="feedback-status-dot" aria-hidden="true" />
+          <p>{status}</p>
+        </div>
+      )}
     </section>
   );
 }
