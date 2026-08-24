@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { useI18n } from "../../i18n-context";
 import { clearLatestCreatedVerificationPackage } from "../../local-package";
 import { getDeployment } from "../../lib/deployment";
@@ -32,10 +33,46 @@ export function CreateSuccessPanel({
   onToggleQr
 }: CreateSuccessPanelProperties) {
   const { t } = useI18n();
+  const qrTriggerRef = useRef<HTMLButtonElement>(null);
+  const qrCloseRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!showShareQr) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    qrCloseRef.current?.focus();
+
+    function handleKeyDown(event: KeyboardEvent): void {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onToggleQr();
+        window.requestAnimationFrame(() => qrTriggerRef.current?.focus());
+        return;
+      }
+
+      if (event.key === "Tab") {
+        event.preventDefault();
+        qrCloseRef.current?.focus();
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [onToggleQr, showShareQr]);
 
   function startNewRecord(): void {
     clearLatestCreatedVerificationPackage();
     window.location.replace("/create");
+  }
+
+  function closeQr(): void {
+    onToggleQr();
+    window.requestAnimationFrame(() => qrTriggerRef.current?.focus());
   }
 
   return (
@@ -171,11 +208,12 @@ export function CreateSuccessPanel({
 
             <div className="success-detail-utility-row">
               <button
+                ref={qrTriggerRef}
                 type="button"
                 className="secondary success-utility-action"
                 onClick={onToggleQr}
                 aria-expanded={showShareQr}
-                aria-controls="create-handoff-qr"
+                aria-controls="create-handoff-qr-dialog"
               >
                 <svg viewBox="0 0 20 20" aria-hidden="true">
                   <rect x="2.5" y="2.5" width="5" height="5" rx="0.5" />
@@ -183,7 +221,7 @@ export function CreateSuccessPanel({
                   <rect x="2.5" y="12.5" width="5" height="5" rx="0.5" />
                   <path d="M12.5 12.5h2v2h-2zM15.5 15.5h2v2h-2zM15.5 12.5h2" />
                 </svg>
-                <span>{t(showShareQr ? "create.hideQr" : "create.showQr")}</span>
+                <span>{t("create.showQr")}</span>
               </button>
 
               <a
@@ -196,16 +234,51 @@ export function CreateSuccessPanel({
                 <span aria-hidden="true">↗</span>
               </a>
             </div>
-
-            {showShareQr && (
-              <div className="handoff-qr-panel success-detail-qr" id="create-handoff-qr">
-                <QrCode value={handoffUrl} label={t("create.qrLabel")} />
-                <p>{t("create.qrWarning")}</p>
-              </div>
-            )}
           </div>
         </details>
       </div>
+
+      {showShareQr && (
+        <div
+          className="qr-modal-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) closeQr();
+          }}
+        >
+          <div
+            className="qr-modal"
+            id="create-handoff-qr-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="create-handoff-qr-title"
+            aria-describedby="create-handoff-qr-warning"
+          >
+            <div className="qr-modal-header">
+              <div>
+                <span className="step-label">BaseStamp</span>
+                <h2 id="create-handoff-qr-title">{t("create.showQr")}</h2>
+              </div>
+              <button
+                ref={qrCloseRef}
+                type="button"
+                className="qr-modal-close"
+                onClick={closeQr}
+                aria-label={t("create.hideQr")}
+                title={t("create.hideQr")}
+              >
+                <span aria-hidden="true">×</span>
+              </button>
+            </div>
+
+            <div className="qr-modal-code">
+              <QrCode value={handoffUrl} label={t("create.qrLabel")} />
+            </div>
+            <p id="create-handoff-qr-warning" className="qr-modal-warning">
+              {t("create.qrWarning")}
+            </p>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
