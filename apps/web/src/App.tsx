@@ -108,10 +108,24 @@ export function App() {
   const [authBusy, setAuthBusy] = useState(false);
   const [selectedChainId, setSelectedChainId] =
     useState<SupportedChainId>(DEFAULT_BASE_CHAIN_ID);
+  const authDebugEnabled =
+    new URLSearchParams(window.location.search).get("authdebug") === "1";
+  const [authDiagnostics, setAuthDiagnostics] = useState<string[]>([]);
   const lastAutoSwitch = useRef<string | undefined>(undefined);
   const adoptedWalletConnection = useRef<string | undefined>(undefined);
   const lastAutoAuthentication = useRef<string | undefined>(undefined);
   const selectedNetwork = getBaseNetwork(selectedChainId);
+  const traceAuth = useCallback(
+    (event: string) => {
+      if (!authDebugEnabled) return;
+      const timestamp = new Date().toISOString().slice(11, 23);
+      setAuthDiagnostics((entries) => [
+        ...entries.slice(-15),
+        `${timestamp} ${event}`
+      ]);
+    },
+    [authDebugEnabled]
+  );
   const showAuthStatus = useCallback(
     (message: string, tone: AuthTone = "neutral") => {
       setAuthFeedback({ message, tone });
@@ -125,6 +139,7 @@ export function App() {
         throw new Error(t("auth.providerUnavailable"));
       }
       try {
+        traceAuth(`RPC eth_chainId via ${connector.id}`);
         const currentChainId = await readConnectorChainId(connector);
         if (currentChainId === selectedChainId) return;
 
@@ -141,16 +156,20 @@ export function App() {
           if (provider == null) {
             throw new Error(t("auth.providerUnavailable"));
           }
+          traceAuth("RPC wallet_switchEthereumChain via baseAccount");
           await provider.request({
             method: "wallet_switchEthereumChain",
             params: [{ chainId: numberToHex(selectedChainId) }]
           });
+          traceAuth("RPC eth_chainId after network switch");
           switchedChainId = await readConnectorChainId(connector);
         } else {
+          traceAuth(`wagmi switchChain via ${connector.id}`);
           switchedChainId = (
             await switchChainAsync({ chainId: selectedChainId, connector })
           ).id;
         }
+        traceAuth("RPC eth_chainId confirm network");
         const confirmedChainId = await readConnectorChainId(connector);
         if (
           switchedChainId !== selectedChainId ||
@@ -195,7 +214,8 @@ export function App() {
       session,
       showAuthStatus,
       switchChainAsync,
-      t
+      t,
+      traceAuth
     ]
   );
 
@@ -265,18 +285,22 @@ export function App() {
   }
 
   const requestAuthNonce = useCallback(async (): Promise<NonceResponse> => {
+    traceAuth("HTTP POST /api/auth/nonce");
     showAuthStatus(t("auth.requestNonce"), "pending");
-    return fetch("/api/auth/nonce", {
+    const nonce = await fetch("/api/auth/nonce", {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ chainId: selectedChainId })
     }).then((response) => parseJsonResponse<NonceResponse>(response, t));
-  }, [selectedChainId, showAuthStatus, t]);
+    traceAuth("HTTP /api/auth/nonce complete");
+    return nonce;
+  }, [selectedChainId, showAuthStatus, t, traceAuth]);
 
   const verifySignedSiwe = useCallback(async (
     signedMessage: SignedSiweMessage
   ): Promise<void> => {
+    traceAuth("HTTP POST /api/auth/verify");
     showAuthStatus(t("auth.verifying"), "pending");
     const authenticated = await fetch("/api/auth/verify", {
       method: "POST",
@@ -284,9 +308,10 @@ export function App() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(signedMessage)
     }).then((response) => parseJsonResponse<Session>(response, t));
+    traceAuth("HTTP /api/auth/verify complete");
     setSession(authenticated);
     showAuthStatus(t("auth.signedIn"), "success");
-  }, [showAuthStatus, t]);
+  }, [showAuthStatus, t, traceAuth]);
 
   const signIn = useCallback(
     async (requestedConnector: Connector): Promise<void> => {
@@ -295,12 +320,19 @@ export function App() {
       );
 
       if (connector === undefined) {
+        traceAuth("signIn failed: connector unavailable");
         showAuthStatus(t("auth.providerUnavailable"), "error");
         return;
       }
 
       const reuseConnection =
         address !== undefined && activeConnector?.uid === connector.uid;
+
+      traceAuth(`signIn connector=${connector.id}`);
+      traceAuth(`reuseConnection=${String(reuseConnection)}`);
+      traceAuth(
+        `chain wallet=${String(walletChainId ?? "unknown")} selected=${String(selectedChainId)}`
+      );
 
       setAuthBusy(true);
       showAuthStatus(
@@ -322,6 +354,7 @@ export function App() {
           // browsers do not connect and then immediately reconnect.
           nonce = await requestAuthNonce();
           const signInWithEthereum = createBaseSiweCapability(nonce);
+          traceAuth("RPC wallet_connect + signInWithEthereum via baseAccount");
           const connection = await connectAsync({
             connector,
             chainId: selectedChainId,
@@ -330,6 +363,7 @@ export function App() {
               signInWithEthereum
             }
           });
+          traceAuth("RPC wallet_connect returned");
           const parsed = readBaseSiweResponse(connection);
           if (parsed === undefined) {
             throw new Error(t("auth.invalidSignature"));
@@ -348,26 +382,24 @@ export function App() {
             );
           }
         } else if (reuseConnection) {
-          // Once a wallet is already connected, authentication is only SIWE.
-          // In the Base App in-app browser, calling wallet_connect again can
-          // enter the EIP-7702 transaction-setup flow and show a network fee.
-          // personal_sign avoids that transaction setup and matches the Base
-          // App standard-web authentication path.
+          traceAuth("reuse existing wallet connection");
           account = address;
           connectedChainId =
             walletChainId ?? (await readConnectorChainId(connector));
         } else {
-          // Standard injected/browser wallet connection.
+          traceAuth(`wallet connect requested via ${connector.id}`);
           const connection = await connectAsync({
             connector,
             chainId: selectedChainId
           });
+          traceAuth("wallet connect returned");
 
           account = connection.accounts[0];
           connectedChainId = connection.chainId;
         }
 
         if (connectedChainId !== selectedChainId) {
+          traceAuth("network mismatch; switch requested");
           lastAutoSwitch.current =
             `${account}:${String(connectedChainId)}:${String(selectedChainId)}`;
 
@@ -400,10 +432,12 @@ export function App() {
             throw new Error(t("auth.providerUnavailable"));
           }
 
+          traceAuth(`RPC personal_sign via ${connector.id}`);
           const signature = await provider.request({
             method: "personal_sign",
             params: [stringToHex(message), account]
           });
+          traceAuth("RPC personal_sign returned");
 
           if (typeof signature !== "string" || !isHex(signature)) {
             throw new Error(t("auth.invalidSignature"));
@@ -417,6 +451,7 @@ export function App() {
 
         await verifySignedSiwe(signedMessage);
       } catch (error) {
+        traceAuth("signIn failed");
         showAuthStatus(
           error instanceof Error
             ? error.message
@@ -438,6 +473,7 @@ export function App() {
       selectedNetwork.name,
       showAuthStatus,
       t,
+      traceAuth,
       verifySignedSiwe,
       walletChainId
     ]
@@ -495,6 +531,7 @@ export function App() {
     const attemptKey = `${address}:${String(selectedChainId)}`;
     if (lastAutoAuthentication.current === attemptKey) return;
     lastAutoAuthentication.current = attemptKey;
+    traceAuth("auto authentication triggered");
     void signIn(activeConnector);
   }, [
     activeConnector,
@@ -505,6 +542,7 @@ export function App() {
     session,
     sessionLoaded,
     signIn,
+    traceAuth,
     walletChainId
   ]);
 
@@ -828,6 +866,81 @@ export function App() {
       </div>
 
       <main>{page}</main>
+
+      {authDebugEnabled && (
+        <aside
+          aria-label="Auth diagnostics"
+          aria-live="polite"
+          style={{
+            position: "fixed",
+            zIndex: 2000,
+            top: 12,
+            left: 12,
+            width: "min(430px, calc(100vw - 24px))",
+            maxHeight: "42vh",
+            overflow: "auto",
+            padding: 12,
+            border: "1px solid rgba(255,255,255,.18)",
+            borderRadius: 12,
+            color: "#f7f5ef",
+            background: "rgba(16,39,31,.94)",
+            boxShadow: "0 12px 36px rgba(0,0,0,.28)",
+            fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+            fontSize: 11,
+            lineHeight: 1.45
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 8,
+              marginBottom: 8
+            }}
+          >
+            <strong style={{ fontSize: 12 }}>Auth diagnostics</strong>
+            <button
+              type="button"
+              onClick={() => setAuthDiagnostics([])}
+              style={{
+                minHeight: 28,
+                padding: "3px 8px",
+                border: "1px solid rgba(255,255,255,.24)",
+                borderRadius: 7,
+                color: "inherit",
+                background: "transparent",
+                boxShadow: "none",
+                font: "inherit"
+              }}
+            >
+              Clear
+            </button>
+          </div>
+          <div style={{ opacity: 0.78, marginBottom: 8 }}>
+            <div>connector: {activeConnector?.id ?? "none"}</div>
+            <div>connected: {address === undefined ? "no" : "yes"}</div>
+            <div>
+              walletChain: {walletChainId ?? "unknown"} · selectedChain: {selectedChainId}
+            </div>
+            <div>
+              session: {session.authenticated ? "authenticated" : "not authenticated"}
+            </div>
+          </div>
+          <ol style={{ margin: 0, paddingLeft: 20 }}>
+            {authDiagnostics.length === 0 ? (
+              <li>Waiting for an authentication action…</li>
+            ) : (
+              authDiagnostics.map((entry, index) => (
+                <li key={`${String(index)}:${entry}`}>{entry}</li>
+              ))
+            )}
+          </ol>
+          <p style={{ margin: "8px 0 0", opacity: 0.68 }}>
+            No nonce, SIWE message, signature, session token, or full wallet address is logged.
+          </p>
+        </aside>
+      )}
 
       <footer className="shell footer">
         <div className="footer-copy">
