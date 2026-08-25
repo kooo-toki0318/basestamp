@@ -43,17 +43,10 @@ import {
 import { parseHandoffRoute, parseStampRoute } from "./lib/routes";
 
 type PersonalSignProvider = {
-  request(arguments_:
-    | {
-        method: "eth_accounts";
-      }
-    | {
-        method: "eth_requestAccounts";
-      }
-    | {
-        method: "personal_sign";
-        params: [Hex, Address];
-      }): Promise<unknown>;
+  request(arguments_: {
+    method: "personal_sign";
+    params: [Hex, Address];
+  }): Promise<unknown>;
 };
 
 type ChainProvider = {
@@ -78,45 +71,6 @@ async function readConnectorChainId(connector: Connector): Promise<number> {
     throw new Error("Wallet returned an invalid chain ID.");
   }
   return Number(BigInt(chainId));
-}
-
-async function findMatchingInjectedAuthConnector(
-  connectors: readonly Connector[],
-  account: Address,
-  traceAuth: (event: string) => void
-): Promise<Connector | undefined> {
-  const connector = connectors.find(
-    (candidate) => candidate.id !== "baseAccount"
-  );
-  if (connector === undefined) return undefined;
-
-  const provider = (await connector.getProvider()) as
-    | PersonalSignProvider
-    | null
-    | undefined;
-  if (provider == null) return undefined;
-
-  const containsAccount = (value: unknown): boolean =>
-    Array.isArray(value) &&
-    value.some(
-      (candidate) =>
-        typeof candidate === "string" &&
-        candidate.toLowerCase() === account.toLowerCase()
-    );
-
-  traceAuth(`RPC eth_accounts via ${connector.id} for auth signer`);
-  let accounts = await provider.request({ method: "eth_accounts" });
-  if (!containsAccount(accounts)) {
-    traceAuth(`RPC eth_requestAccounts via ${connector.id} for auth signer`);
-    accounts = await provider.request({ method: "eth_requestAccounts" });
-  }
-
-  if (!containsAccount(accounts)) {
-    traceAuth(`injected auth signer account mismatch via ${connector.id}`);
-    return undefined;
-  }
-
-  return connector;
 }
 
 type AuthTone = "neutral" | "pending" | "success" | "error";
@@ -469,30 +423,7 @@ export function App() {
 
           showAuthStatus(t("auth.confirmMessage"), "pending");
 
-          let signingConnector = connector;
-          if (connector.id === "baseAccount" && reuseConnection) {
-            traceAuth("look for matching injected auth signer");
-            try {
-              const injectedAuthConnector =
-                await findMatchingInjectedAuthConnector(
-                  connectors,
-                  account,
-                  traceAuth
-                );
-              if (injectedAuthConnector !== undefined) {
-                signingConnector = injectedAuthConnector;
-                traceAuth(
-                  `auth signer=${signingConnector.id} active=${connector.id}`
-                );
-              } else {
-                traceAuth("matching injected auth signer unavailable");
-              }
-            } catch {
-              traceAuth("injected auth signer lookup failed");
-            }
-          }
-
-          const provider = (await signingConnector.getProvider()) as
+          const provider = (await connector.getProvider()) as
             | PersonalSignProvider
             | null
             | undefined;
@@ -501,7 +432,7 @@ export function App() {
             throw new Error(t("auth.providerUnavailable"));
           }
 
-          traceAuth(`RPC personal_sign via ${signingConnector.id}`);
+          traceAuth(`RPC personal_sign via ${connector.id}`);
           const signature = await provider.request({
             method: "personal_sign",
             params: [stringToHex(message), account]
