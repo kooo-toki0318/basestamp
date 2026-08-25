@@ -902,7 +902,9 @@ export function App() {
             <strong style={{ fontSize: 12 }}>Auth diagnostics</strong>
             <button
               type="button"
-              onClick={() => setAuthDiagnostics([])}
+              onClick={() => {
+                setAuthDiagnostics([]);
+              }}
               style={{
                 minHeight: 28,
                 padding: "3px 8px",
