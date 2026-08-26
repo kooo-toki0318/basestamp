@@ -1,0 +1,7 @@
+/* Create uses wallet connection plus the user-approved record transaction as the
+   proof-of-control path. Standalone SIWE remains available for Handoff only. */
+body.basestamp-create-route
+  .auth-area:has(.wallet-identity)
+  > button.compact:not(.secondary) {
+  display: none;
+}
