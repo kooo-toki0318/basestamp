@@ -501,10 +501,7 @@ export function App() {
           traceAuth("RPC wallet_connect auth returned");
 
           const parsed = readBaseSiweResponse(response);
-          if (
-            parsed === undefined ||
-            parsed.address.toLowerCase() !== account.toLowerCase()
-          ) {
+          if (parsed?.address.toLowerCase() !== account.toLowerCase()) {
             throw new Error(t("auth.invalidSignature"));
           }
 
