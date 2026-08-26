@@ -197,13 +197,14 @@ export function App() {
       (connector) => connector.id !== "baseAccount"
     );
     if (injectedConnector === undefined) {
-      setBaseInjectedConnectorUid(undefined);
-      setBaseInjectedProbeComplete(true);
+      queueMicrotask(() => {
+        setBaseInjectedConnectorUid(undefined);
+        setBaseInjectedProbeComplete(true);
+      });
       return;
     }
 
     let cancelled = false;
-    setBaseInjectedProbeComplete(false);
     void injectedConnector
       .getProvider()
       .then((provider) => {
@@ -434,9 +435,6 @@ export function App() {
         traceAuth("wallet connect returned");
 
         const account = connection.accounts[0];
-        if (account === undefined) {
-          throw new Error(t("auth.providerUnavailable"));
-        }
 
         if (connection.chainId !== selectedChainId) {
           lastAutoSwitch.current =
