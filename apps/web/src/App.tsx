@@ -18,6 +18,8 @@ import {
 import { createSiweMessage } from "viem/siwe";
 import type { Session } from "./auth-types";
 import {
+  createBaseSiweCapability,
+  readBaseSiweResponse,
   SIWE_STATEMENT,
   type NonceResponse,
   type SignedSiweMessage
@@ -41,17 +43,24 @@ import {
 import { parseHandoffRoute, parseStampRoute } from "./lib/routes";
 
 type PersonalSignProvider = {
-  request(arguments_:
-    | {
-        method: "eth_accounts";
+  request(arguments_: {
+    method: "personal_sign";
+    params: [Hex, Address];
+  }): Promise<unknown>;
+};
+
+type WalletConnectAuthProvider = {
+  request(arguments_: {
+    method: "wallet_connect";
+    params: [
+      {
+        version: "1";
+        capabilities: {
+          signInWithEthereum: ReturnType<typeof createBaseSiweCapability>;
+        };
       }
-    | {
-        method: "eth_requestAccounts";
-      }
-    | {
-        method: "personal_sign";
-        params: [Hex, Address];
-      }): Promise<unknown>;
+    ];
+  }): Promise<unknown>;
 };
 
 type ChainProvider = {
@@ -87,45 +96,6 @@ async function readConnectorChainId(connector: Connector): Promise<number> {
     throw new Error("Wallet returned an invalid chain ID.");
   }
   return Number(BigInt(chainId));
-}
-
-async function findMatchingInjectedAuthConnector(
-  connectors: readonly Connector[],
-  account: Address,
-  traceAuth: (event: string) => void
-): Promise<Connector | undefined> {
-  const connector = connectors.find(
-    (candidate) => candidate.id !== "baseAccount"
-  );
-  if (connector === undefined) return undefined;
-
-  const provider = (await connector.getProvider()) as
-    | PersonalSignProvider
-    | null
-    | undefined;
-  if (provider == null) return undefined;
-
-  const containsAccount = (value: unknown): boolean =>
-    Array.isArray(value) &&
-    value.some(
-      (candidate) =>
-        typeof candidate === "string" &&
-        candidate.toLowerCase() === account.toLowerCase()
-    );
-
-  traceAuth(`RPC eth_accounts via ${connector.id} for auth signer`);
-  let accounts = await provider.request({ method: "eth_accounts" });
-  if (!containsAccount(accounts)) {
-    traceAuth(`RPC eth_requestAccounts via ${connector.id} for auth signer`);
-    accounts = await provider.request({ method: "eth_requestAccounts" });
-  }
-
-  if (!containsAccount(accounts)) {
-    traceAuth(`injected auth signer account mismatch via ${connector.id}`);
-    return undefined;
-  }
-
-  return connector;
 }
 
 type AuthTone = "neutral" | "pending" | "success" | "error";
@@ -506,6 +476,42 @@ export function App() {
         }
 
         const nonce = await requestAuthNonce();
+        const rawProvider = await connector.getProvider();
+        if (rawProvider == null) {
+          throw new Error(t("auth.providerUnavailable"));
+        }
+
+        if (connector.id === "baseAccount" || isBaseInjectedProvider(rawProvider)) {
+          showAuthStatus(t("auth.confirmMessage"), "pending");
+          const provider = rawProvider as WalletConnectAuthProvider;
+          traceAuth(
+            `RPC wallet_connect + signInWithEthereum via ${connector.id}`
+          );
+          const response = await provider.request({
+            method: "wallet_connect",
+            params: [
+              {
+                version: "1",
+                capabilities: {
+                  signInWithEthereum: createBaseSiweCapability(nonce)
+                }
+              }
+            ]
+          });
+          traceAuth("RPC wallet_connect auth returned");
+
+          const parsed = readBaseSiweResponse(response);
+          if (
+            parsed === undefined ||
+            parsed.address.toLowerCase() !== account.toLowerCase()
+          ) {
+            throw new Error(t("auth.invalidSignature"));
+          }
+
+          await verifySignedSiwe(parsed.signedMessage);
+          return;
+        }
+
         const message = createSiweMessage({
           address: account,
           chainId: nonce.chainId,
@@ -520,39 +526,8 @@ export function App() {
 
         showAuthStatus(t("auth.confirmMessage"), "pending");
 
-        let signingConnector: Connector = connector;
-        if (connector.id === "baseAccount") {
-          traceAuth("look for matching injected auth signer");
-          try {
-            const injectedAuthConnector =
-              await findMatchingInjectedAuthConnector(
-                connectors,
-                account,
-                traceAuth
-              );
-            if (injectedAuthConnector !== undefined) {
-              signingConnector = injectedAuthConnector;
-              traceAuth(
-                `auth signer=${signingConnector.id} active=${connector.id}`
-              );
-            } else {
-              traceAuth("matching injected auth signer unavailable");
-            }
-          } catch {
-            traceAuth("injected auth signer lookup failed");
-          }
-        }
-
-        const provider = (await signingConnector.getProvider()) as
-          | PersonalSignProvider
-          | null
-          | undefined;
-
-        if (provider == null) {
-          throw new Error(t("auth.providerUnavailable"));
-        }
-
-        traceAuth(`RPC personal_sign via ${signingConnector.id}`);
+        const provider = rawProvider as PersonalSignProvider;
+        traceAuth(`RPC personal_sign via ${connector.id}`);
         const signature = await provider.request({
           method: "personal_sign",
           params: [stringToHex(message), account]
@@ -764,7 +739,7 @@ export function App() {
           <img src="/basestamp-icon.png" alt="" aria-hidden="true" />
           BaseStamp
         </a>
-        <nav className="nav-links" aria-label={t("nav.primary")}> 
+        <nav className="nav-links" aria-label={t("nav.primary")}>
           <a href="/create">{t("nav.create")}</a>
           <a href="/verify">{t("nav.verify")}</a>
           <a
@@ -1046,7 +1021,7 @@ export function App() {
           <span>{t("footer.product")}</span>
           <span>{t("footer.boundary")}</span>
         </div>
-        <nav className="footer-links" aria-label={t("footer.information")}> 
+        <nav className="footer-links" aria-label={t("footer.information")}>
           <a href="/about/legal">{t("footer.legal")}</a>
           <a href="/privacy">{t("footer.privacy")}</a>
           <a href="/terms">{t("footer.terms")}</a>

@@ -22,7 +22,7 @@ if (root === null) throw new Error("Application root is missing.");
 createRoot(root).render(
   <StrictMode>
     <I18nProvider>
-      <WagmiProvider config={wagmiConfig}>
+      <WagmiProvider config={wagmiConfig} reconnectOnMount={false}>
         <QueryClientProvider client={queryClient}>
           <App />
         </QueryClientProvider>
