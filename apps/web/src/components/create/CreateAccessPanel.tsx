@@ -43,7 +43,7 @@ export function CreateAccessPanel({
       >
         <div className="auth-readiness-copy">
           <h2 id="create-auth-heading">{t("create.authTitle")}</h2>
-          <p>{t("create.authIntro")}</p>
+          <p>{t("create.walletMissing")}</p>
         </div>
         <ol className="auth-checklist">
           <li className="is-needed">
