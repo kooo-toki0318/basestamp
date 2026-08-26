@@ -65,7 +65,15 @@ function requireWalletAddress(value: unknown): Address {
 function jsonResponse(value: unknown, status = 200): Response {
   return Response.json(value, {
     status,
-    headers: { "Cache-Control": "no-store" }
+    headers: {
+      "Cache-Control": "no-store",
+      "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
+      "Cross-Origin-Resource-Policy": "same-origin",
+      "Referrer-Policy": "no-referrer",
+      "Strict-Transport-Security": "max-age=15552000; includeSubDomains",
+      "X-Content-Type-Options": "nosniff",
+      "X-Frame-Options": "DENY"
+    }
   });
 }
 
