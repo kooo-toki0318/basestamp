@@ -159,7 +159,6 @@ export function App() {
   const [authDiagnostics, setAuthDiagnostics] = useState<string[]>([]);
   const lastAutoSwitch = useRef<string | undefined>(undefined);
   const adoptedWalletConnection = useRef<string | undefined>(undefined);
-  const lastAutoAuthentication = useRef<string | undefined>(undefined);
   const selectedNetwork = getBaseNetwork(selectedChainId);
   const traceAuth = useCallback(
     (event: string) => {
@@ -571,46 +570,6 @@ export function App() {
       setAuthBusy(false);
     }
   }
-
-  useEffect(() => {
-    if (
-      !sessionLoaded ||
-      authBusy ||
-      networkBusy ||
-      address === undefined ||
-      activeConnector?.id !== "baseAccount" ||
-      walletChainId !== selectedChainId
-    ) {
-      return;
-    }
-
-    const alreadyAuthenticated =
-      session.authenticated &&
-      session.walletAddress.toLowerCase() === address.toLowerCase() &&
-      session.chainId === selectedChainId;
-
-    if (alreadyAuthenticated) {
-      lastAutoAuthentication.current = undefined;
-      return;
-    }
-
-    const attemptKey = `${address}:${String(selectedChainId)}`;
-    if (lastAutoAuthentication.current === attemptKey) return;
-    lastAutoAuthentication.current = attemptKey;
-    traceAuth("auto authentication triggered");
-    void signIn(activeConnector);
-  }, [
-    activeConnector,
-    address,
-    authBusy,
-    networkBusy,
-    selectedChainId,
-    session,
-    sessionLoaded,
-    signIn,
-    traceAuth,
-    walletChainId
-  ]);
 
   async function copyAddress(): Promise<void> {
     if (address === undefined) return;
