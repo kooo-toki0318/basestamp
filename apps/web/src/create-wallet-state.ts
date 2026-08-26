@@ -12,8 +12,10 @@ export type SponsorCapabilityState =
 export function getCreateWalletState(
   connected: boolean,
   walletChainId: number | undefined,
-  selectedChainId: number
+  selectedChainId: number,
+  legacyAuthenticationState?: boolean
 ): CreateWalletState {
+  void legacyAuthenticationState;
   if (!connected) return "disconnected";
   if (walletChainId !== selectedChainId) return "wrong-network";
   return "ready";
