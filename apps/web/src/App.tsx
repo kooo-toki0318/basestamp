@@ -18,8 +18,6 @@ import {
 import { createSiweMessage } from "viem/siwe";
 import type { Session } from "./auth-types";
 import {
-  createBaseSiweCapability,
-  readBaseSiweResponse,
   SIWE_STATEMENT,
   type NonceResponse,
   type SignedSiweMessage
@@ -66,6 +64,17 @@ type ChainProvider = {
         params: [{ chainId: Hex }];
       }): Promise<unknown>;
 };
+
+type BaseInjectedProvider = {
+  isBase?: boolean;
+  isCoinbaseWallet?: boolean;
+};
+
+function isBaseInjectedProvider(provider: unknown): boolean {
+  if (provider === null || typeof provider !== "object") return false;
+  const candidate = provider as BaseInjectedProvider;
+  return candidate.isBase === true || candidate.isCoinbaseWallet === true;
+}
 
 async function readConnectorChainId(connector: Connector): Promise<number> {
   const provider = (await connector.getProvider()) as
@@ -157,6 +166,11 @@ export function App() {
   const authDebugEnabled =
     new URLSearchParams(window.location.search).get("authdebug") === "1";
   const [authDiagnostics, setAuthDiagnostics] = useState<string[]>([]);
+  const [baseInjectedConnectorUid, setBaseInjectedConnectorUid] = useState<
+    string | undefined
+  >(undefined);
+  const [baseInjectedProbeComplete, setBaseInjectedProbeComplete] =
+    useState(false);
   const lastAutoSwitch = useRef<string | undefined>(undefined);
   const adoptedWalletConnection = useRef<string | undefined>(undefined);
   const selectedNetwork = getBaseNetwork(selectedChainId);
@@ -177,6 +191,44 @@ export function App() {
     },
     []
   );
+
+  useEffect(() => {
+    const injectedConnector = connectors.find(
+      (connector) => connector.id !== "baseAccount"
+    );
+    if (injectedConnector === undefined) {
+      setBaseInjectedConnectorUid(undefined);
+      setBaseInjectedProbeComplete(true);
+      return;
+    }
+
+    let cancelled = false;
+    setBaseInjectedProbeComplete(false);
+    void injectedConnector
+      .getProvider()
+      .then((provider) => {
+        if (cancelled) return;
+        const isBaseProvider = isBaseInjectedProvider(provider);
+        traceAuth(
+          `injected provider probe=${isBaseProvider ? "base" : "other"}`
+        );
+        setBaseInjectedConnectorUid(
+          isBaseProvider ? injectedConnector.uid : undefined
+        );
+      })
+      .catch(() => {
+        if (cancelled) return;
+        traceAuth("injected provider probe failed");
+        setBaseInjectedConnectorUid(undefined);
+      })
+      .finally(() => {
+        if (!cancelled) setBaseInjectedProbeComplete(true);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [connectors, traceAuth]);
 
   const ensureSelectedNetwork = useCallback(
     async (connector: Connector | undefined = activeConnector) => {
@@ -358,163 +410,162 @@ export function App() {
     showAuthStatus(t("auth.signedIn"), "success");
   }, [showAuthStatus, t, traceAuth]);
 
+  const connectWallet = useCallback(
+    async (requestedConnector: Connector): Promise<void> => {
+      const connector = connectors.find(
+        (candidate) => candidate.uid === requestedConnector.uid
+      );
+      if (connector === undefined) {
+        showAuthStatus(t("auth.providerUnavailable"), "error");
+        return;
+      }
+
+      setAuthBusy(true);
+      showAuthStatus(
+        t("auth.connecting", { network: selectedNetwork.name }),
+        "pending"
+      );
+      try {
+        traceAuth(`wallet connect requested via ${connector.id}`);
+        const connection = await connectAsync({
+          connector,
+          chainId: selectedChainId
+        });
+        traceAuth("wallet connect returned");
+
+        const account = connection.accounts[0];
+        if (account === undefined) {
+          throw new Error(t("auth.providerUnavailable"));
+        }
+
+        if (connection.chainId !== selectedChainId) {
+          lastAutoSwitch.current =
+            `${account}:${String(connection.chainId)}:${String(selectedChainId)}`;
+          await ensureSelectedNetwork(connector);
+        }
+
+        showAuthStatus(t("auth.connected"), "success");
+      } catch (error) {
+        traceAuth("wallet connect failed");
+        showAuthStatus(
+          error instanceof Error ? error.message : t("auth.signInFailed"),
+          "error"
+        );
+      } finally {
+        setAuthBusy(false);
+      }
+    },
+    [
+      connectAsync,
+      connectors,
+      ensureSelectedNetwork,
+      selectedChainId,
+      selectedNetwork.name,
+      showAuthStatus,
+      t,
+      traceAuth
+    ]
+  );
+
   const signIn = useCallback(
     async (requestedConnector: Connector): Promise<void> => {
       const connector = connectors.find(
         (candidate) => candidate.uid === requestedConnector.uid
       );
 
-      if (connector === undefined) {
-        traceAuth("signIn failed: connector unavailable");
+      if (
+        connector === undefined ||
+        address === undefined ||
+        activeConnector?.uid !== connector.uid
+      ) {
+        traceAuth("signIn failed: active connector unavailable");
         showAuthStatus(t("auth.providerUnavailable"), "error");
         return;
       }
 
-      const reuseConnection =
-        address !== undefined && activeConnector?.uid === connector.uid;
-
       traceAuth(`signIn connector=${connector.id}`);
-      traceAuth(`reuseConnection=${String(reuseConnection)}`);
+      traceAuth("reuseConnection=true");
       traceAuth(
         `chain wallet=${String(walletChainId ?? "unknown")} selected=${String(selectedChainId)}`
       );
 
       setAuthBusy(true);
       showAuthStatus(
-        reuseConnection
-          ? t("auth.preparing", { network: selectedNetwork.name })
-          : t("auth.connecting", { network: selectedNetwork.name }),
+        t("auth.preparing", { network: selectedNetwork.name }),
         "pending"
       );
 
       try {
-        let account: Address | undefined;
-        let connectedChainId: number | undefined;
-        let nonce: NonceResponse | undefined;
-        let signedMessage: SignedSiweMessage | undefined;
-
-        if (connector.id === "baseAccount" && !reuseConnection) {
-          nonce = await requestAuthNonce();
-          const signInWithEthereum = createBaseSiweCapability(nonce);
-          traceAuth("RPC wallet_connect + signInWithEthereum via baseAccount");
-          const connection = await connectAsync({
-            connector,
-            chainId: selectedChainId,
-            withCapabilities: true,
-            capabilities: {
-              signInWithEthereum
-            }
-          });
-          traceAuth("RPC wallet_connect returned");
-          const parsed = readBaseSiweResponse(connection);
-          if (parsed === undefined) {
-            throw new Error(t("auth.invalidSignature"));
-          }
-
-          account = parsed.address;
-          signedMessage = parsed.signedMessage;
-          connectedChainId = connection.chainId;
-
-          if (connectedChainId !== selectedChainId) {
-            throw new Error(
-              t("auth.switchIncomplete", {
-                chainId: connectedChainId,
-                network: selectedNetwork.name
-              })
-            );
-          }
-        } else if (reuseConnection) {
-          traceAuth("reuse existing wallet connection");
-          account = address;
-          connectedChainId =
-            walletChainId ?? (await readConnectorChainId(connector));
-        } else {
-          traceAuth(`wallet connect requested via ${connector.id}`);
-          const connection = await connectAsync({
-            connector,
-            chainId: selectedChainId
-          });
-          traceAuth("wallet connect returned");
-
-          account = connection.accounts[0];
-          connectedChainId = connection.chainId;
-        }
+        const account = address;
+        const connectedChainId =
+          walletChainId ?? (await readConnectorChainId(connector));
 
         if (connectedChainId !== selectedChainId) {
           traceAuth("network mismatch; switch requested");
           lastAutoSwitch.current =
             `${account}:${String(connectedChainId)}:${String(selectedChainId)}`;
-
           await ensureSelectedNetwork(connector);
         }
 
-        if (signedMessage === undefined) {
-          nonce ??= await requestAuthNonce();
+        const nonce = await requestAuthNonce();
+        const message = createSiweMessage({
+          address: account,
+          chainId: nonce.chainId,
+          domain: nonce.domain,
+          uri: nonce.uri,
+          version: "1",
+          nonce: nonce.nonce,
+          issuedAt: new Date(nonce.issuedAt),
+          expirationTime: new Date(nonce.expirationTime),
+          statement: SIWE_STATEMENT
+        });
 
-          const message = createSiweMessage({
-            address: account,
-            chainId: nonce.chainId,
-            domain: nonce.domain,
-            uri: nonce.uri,
-            version: "1",
-            nonce: nonce.nonce,
-            issuedAt: new Date(nonce.issuedAt),
-            expirationTime: new Date(nonce.expirationTime),
-            statement: SIWE_STATEMENT
-          });
+        showAuthStatus(t("auth.confirmMessage"), "pending");
 
-          showAuthStatus(t("auth.confirmMessage"), "pending");
-
-          let signingConnector: Connector = connector;
-          if (connector.id === "baseAccount" && reuseConnection) {
-            traceAuth("look for matching injected auth signer");
-            try {
-              const injectedAuthConnector =
-                await findMatchingInjectedAuthConnector(
-                  connectors,
-                  account,
-                  traceAuth
-                );
-              if (injectedAuthConnector !== undefined) {
-                signingConnector = injectedAuthConnector;
-                traceAuth(
-                  `auth signer=${signingConnector.id} active=${connector.id}`
-                );
-              } else {
-                traceAuth("matching injected auth signer unavailable");
-              }
-            } catch {
-              traceAuth("injected auth signer lookup failed");
+        let signingConnector: Connector = connector;
+        if (connector.id === "baseAccount") {
+          traceAuth("look for matching injected auth signer");
+          try {
+            const injectedAuthConnector =
+              await findMatchingInjectedAuthConnector(
+                connectors,
+                account,
+                traceAuth
+              );
+            if (injectedAuthConnector !== undefined) {
+              signingConnector = injectedAuthConnector;
+              traceAuth(
+                `auth signer=${signingConnector.id} active=${connector.id}`
+              );
+            } else {
+              traceAuth("matching injected auth signer unavailable");
             }
+          } catch {
+            traceAuth("injected auth signer lookup failed");
           }
-
-          const provider = (await signingConnector.getProvider()) as
-            | PersonalSignProvider
-            | null
-            | undefined;
-
-          if (provider == null) {
-            throw new Error(t("auth.providerUnavailable"));
-          }
-
-          traceAuth(`RPC personal_sign via ${signingConnector.id}`);
-          const signature = await provider.request({
-            method: "personal_sign",
-            params: [stringToHex(message), account]
-          });
-          traceAuth("RPC personal_sign returned");
-
-          if (typeof signature !== "string" || !isHex(signature)) {
-            throw new Error(t("auth.invalidSignature"));
-          }
-
-          signedMessage = {
-            message,
-            signature
-          };
         }
 
-        await verifySignedSiwe(signedMessage);
+        const provider = (await signingConnector.getProvider()) as
+          | PersonalSignProvider
+          | null
+          | undefined;
+
+        if (provider == null) {
+          throw new Error(t("auth.providerUnavailable"));
+        }
+
+        traceAuth(`RPC personal_sign via ${signingConnector.id}`);
+        const signature = await provider.request({
+          method: "personal_sign",
+          params: [stringToHex(message), account]
+        });
+        traceAuth("RPC personal_sign returned");
+
+        if (typeof signature !== "string" || !isHex(signature)) {
+          throw new Error(t("auth.invalidSignature"));
+        }
+
+        await verifySignedSiwe({ message, signature });
       } catch (error) {
         traceAuth("signIn failed");
         showAuthStatus(
@@ -530,7 +581,6 @@ export function App() {
     [
       activeConnector,
       address,
-      connectAsync,
       connectors,
       ensureSelectedNetwork,
       requestAuthNonce,
@@ -587,6 +637,16 @@ export function App() {
   const injectedConnector = connectors.find(
     (connector) => connector.id !== "baseAccount"
   );
+  const baseInjectedConnector = connectors.find(
+    (connector) => connector.uid === baseInjectedConnectorUid
+  );
+  const preferredBaseConnector = baseInjectedProbeComplete
+    ? (baseInjectedConnector ?? baseConnector)
+    : undefined;
+  const secondaryBrowserConnector =
+    injectedConnector?.uid === preferredBaseConnector?.uid
+      ? undefined
+      : injectedConnector;
   const walletChainMatchesSelection = walletChainId === selectedChainId;
   const authenticatedConnection =
     session.authenticated &&
@@ -613,13 +673,17 @@ export function App() {
         selectedChainId={selectedChainId}
         session={session}
         authBusy={authBusy || networkBusy}
-        baseSignInAvailable={baseConnector !== undefined}
-        browserSignInAvailable={injectedConnector !== undefined}
+        baseSignInAvailable={preferredBaseConnector !== undefined}
+        browserSignInAvailable={secondaryBrowserConnector !== undefined}
         onSignInBase={() => {
-          if (baseConnector !== undefined) void signIn(baseConnector);
+          if (preferredBaseConnector !== undefined) {
+            void connectWallet(preferredBaseConnector);
+          }
         }}
         onSignInBrowser={() => {
-          if (injectedConnector !== undefined) void signIn(injectedConnector);
+          if (secondaryBrowserConnector !== undefined) {
+            void connectWallet(secondaryBrowserConnector);
+          }
         }}
         onAuthenticate={() => {
           if (activeConnector !== undefined) void signIn(activeConnector);
@@ -641,13 +705,17 @@ export function App() {
         selectedChainId={selectedChainId}
         session={session}
         authBusy={authBusy || networkBusy}
-        baseSignInAvailable={baseConnector !== undefined}
-        browserSignInAvailable={injectedConnector !== undefined}
+        baseSignInAvailable={preferredBaseConnector !== undefined}
+        browserSignInAvailable={secondaryBrowserConnector !== undefined}
         onSignInBase={() => {
-          if (baseConnector !== undefined) void signIn(baseConnector);
+          if (preferredBaseConnector !== undefined) {
+            void connectWallet(preferredBaseConnector);
+          }
         }}
         onSignInBrowser={() => {
-          if (injectedConnector !== undefined) void signIn(injectedConnector);
+          if (secondaryBrowserConnector !== undefined) {
+            void connectWallet(secondaryBrowserConnector);
+          }
         }}
         onAuthenticate={() => {
           if (activeConnector !== undefined) void signIn(activeConnector);
@@ -698,7 +766,7 @@ export function App() {
           <img src="/basestamp-icon.png" alt="" aria-hidden="true" />
           BaseStamp
         </a>
-        <nav className="nav-links" aria-label={t("nav.primary")}>
+        <nav className="nav-links" aria-label={t("nav.primary")}> 
           <a href="/create">{t("nav.create")}</a>
           <a href="/verify">{t("nav.verify")}</a>
           <a
@@ -789,18 +857,24 @@ export function App() {
               <button
                 className="compact"
                 type="button"
-                onClick={() =>
-                  baseConnector && void signIn(baseConnector)
+                onClick={() => {
+                  if (preferredBaseConnector !== undefined) {
+                    void connectWallet(preferredBaseConnector);
+                  }
+                }}
+                disabled={
+                  authBusy ||
+                  networkBusy ||
+                  preferredBaseConnector === undefined
                 }
-                disabled={authBusy || networkBusy || baseConnector === undefined}
               >
                 {t("auth.signInBase")}
               </button>
-              {injectedConnector !== undefined && (
+              {secondaryBrowserConnector !== undefined && (
                 <button
                   className="compact secondary"
                   type="button"
-                  onClick={() => void signIn(injectedConnector)}
+                  onClick={() => void connectWallet(secondaryBrowserConnector)}
                   disabled={authBusy || networkBusy}
                 >
                   {t("auth.browserWallet")}
@@ -974,7 +1048,7 @@ export function App() {
           <span>{t("footer.product")}</span>
           <span>{t("footer.boundary")}</span>
         </div>
-        <nav className="footer-links" aria-label={t("footer.information")}>
+        <nav className="footer-links" aria-label={t("footer.information")}> 
           <a href="/about/legal">{t("footer.legal")}</a>
           <a href="/privacy">{t("footer.privacy")}</a>
           <a href="/terms">{t("footer.terms")}</a>
