@@ -15,13 +15,8 @@ type CreateAccessPanelProperties = {
   browserSignInAvailable: boolean;
   onSignInBase: () => void;
   onSignInBrowser: () => void;
-  onAuthenticate: () => void;
   onSwitchNetwork: () => void;
 };
-
-function shortAddress(value: Address): string {
-  return value.slice(0, 6) + "…" + value.slice(-4);
-}
 
 export function CreateAccessPanel({
   address,
@@ -35,7 +30,6 @@ export function CreateAccessPanel({
   browserSignInAvailable,
   onSignInBase,
   onSignInBrowser,
-  onAuthenticate,
   onSwitchNetwork
 }: CreateAccessPanelProperties) {
   const { t } = useI18n();
@@ -58,16 +52,6 @@ export function CreateAccessPanel({
               <small>{t("create.walletMissing")}</small>
             </span>
             <span className="requirement-badge">
-              {t("create.requirementNeeded")}
-            </span>
-          </li>
-          <li>
-            <span className="auth-check-number">2</span>
-            <span>
-              <strong>{t("create.authenticationStep")}</strong>
-              <small>{t("create.authenticationMissing")}</small>
-            </span>
-            <span className="requirement-badge is-next">
               {t("create.requirementNeeded")}
             </span>
           </li>
@@ -126,37 +110,6 @@ export function CreateAccessPanel({
             disabled={busy || authBusy}
           >
             {t("auth.switchTo", { network: selectedNetworkName })}
-          </button>
-        </div>
-      </section>
-    );
-  }
-
-  if (walletState === "authentication-required") {
-    return (
-      <section
-        className="authentication-prompt"
-        aria-labelledby="create-authenticate-heading"
-      >
-        <span className="authentication-prompt-icon" aria-hidden="true">
-          2
-        </span>
-        <div>
-          <p className="authentication-prompt-kicker">
-            {t("create.authenticationStep")}
-          </p>
-          <h2 id="create-authenticate-heading">
-            {t("create.authenticateTitle")}
-          </h2>
-          <p>
-            {t("create.authenticateIntro", {
-              address: shortAddress(address)
-            })}
-          </p>
-        </div>
-        <div className="authentication-prompt-action">
-          <button type="button" onClick={onAuthenticate} disabled={authBusy}>
-            {t("auth.authenticate")}
           </button>
         </div>
       </section>
