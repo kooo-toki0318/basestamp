@@ -15,6 +15,7 @@ type CreateAccessPanelProperties = {
   browserSignInAvailable: boolean;
   onSignInBase: () => void;
   onSignInBrowser: () => void;
+  onAuthenticate?: () => void;
   onSwitchNetwork: () => void;
 };
 
