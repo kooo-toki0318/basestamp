@@ -8,19 +8,17 @@ import {
 
 describe("Create wallet readiness", () => {
   it("requires the live wallet chain to match the selected chain", () => {
-    expect(getCreateWalletState(true, 8453, 84532, true)).toBe(
+    expect(getCreateWalletState(true, 8453, 84532)).toBe(
       "wrong-network"
     );
-    expect(getCreateWalletState(true, 84532, 84532, true)).toBe("ready");
+    expect(getCreateWalletState(true, 84532, 84532)).toBe("ready");
   });
 
-  it("keeps connection, chain, and authentication as separate gates", () => {
-    expect(getCreateWalletState(false, undefined, 84532, false)).toBe(
+  it("uses connection and chain as the only Create wallet gates", () => {
+    expect(getCreateWalletState(false, undefined, 84532)).toBe(
       "disconnected"
     );
-    expect(getCreateWalletState(true, 84532, 84532, false)).toBe(
-      "authentication-required"
-    );
+    expect(getCreateWalletState(true, 84532, 84532, false)).toBe("ready");
   });
 });
 
