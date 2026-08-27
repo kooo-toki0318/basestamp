@@ -16,7 +16,7 @@ const BUILDER_SUFFIX = Attribution.toDataSuffix({ codes: [BUILDER_CODE] });
 
 describe("sponsored stamp call", () => {
   it.each([BASE_MAINNET_DEPLOYMENT, BASE_SEPOLIA_DEPLOYMENT])(
-    "pins one atomic Registry call and local paymaster on $network",
+    "pins one Registry call and local paymaster on $network without forcing atomic execution",
     (deployment) => {
       const request = createSponsoredStampCall({
         account: "0x1111111111111111111111111111111111111111",
@@ -34,7 +34,7 @@ describe("sponsored stamp call", () => {
       });
 
       expect(request.chainId).toBe(deployment.chainId);
-      expect(request.forceAtomic).toBe(true);
+      expect(request).not.toHaveProperty("forceAtomic");
       expect(request.calls).toHaveLength(1);
       expect(request.calls[0].to).toBe(deployment.registryAddress);
       expect(request.capabilities.dataSuffix).toEqual({
