@@ -88,6 +88,7 @@ async function mainnetClaim(): Promise<SponsorClaim> {
       8453,
       SENDER
     ),
+    operationFingerprintHash: null,
     policyVersion: 3,
     providerResponseJson: null,
     requestFingerprintHash: null,
