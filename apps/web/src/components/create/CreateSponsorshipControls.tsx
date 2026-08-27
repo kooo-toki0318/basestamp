@@ -77,7 +77,7 @@ export function CreateSponsorshipControls({
       }
       const bytecode = await getDeploymentPublicClient(
         supportedChainId
-      ).getBytecode({ address });
+      ).getCode({ address });
       return classifySponsorWalletBytecode(bytecode);
     },
     enabled: shouldCheckWalletSetup,
