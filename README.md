@@ -304,9 +304,19 @@ Worker and D1 deployment. Apply all pending D1 migrations before deploying new
 Worker code; in particular, the operation-binding Worker must not be deployed
 before migration `0006_sponsor_operation_binding.sql`.
 
-From `apps/web`, configure a randomly generated session secret interactively
-when needed, apply migrations, then deploy. Never pass secrets on the command
-line or commit them.
+For a production release, run the local verification and build steps first,
+then deploy the already-built Worker/assets. From the repository root:
+
+```bash
+pnpm run lint
+pnpm run typecheck
+pnpm run test
+pnpm run build
+```
+
+Then from `apps/web`, apply pending migrations when needed and deploy. Configure
+`SESSION_HASH_SECRET` interactively only when it needs to be created or rotated.
+Never pass secrets on the command line or commit them.
 
 ```bash
 pnpm exec wrangler d1 migrations apply DB --remote
