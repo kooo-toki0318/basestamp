@@ -39,6 +39,8 @@ const RESERVATION_RETRY_DELAY_MS = 50;
 const RESERVATION_WAIT_TIMEOUT_MS = PROVIDER_TIMEOUT_MS + 500;
 const BUILDER_CODE_PATTERN = /^[A-Za-z0-9_-]{1,64}$/u;
 const HEX_DATA_PATTERN = /^0x(?:[0-9a-fA-F]{2})+$/u;
+const HEX_BYTES_PATTERN = /^0x(?:[0-9a-fA-F]{2})*$/u;
+const HEX_QUANTITY_PATTERN = /^0x[0-9a-fA-F]+$/u;
 const BASE64_PATTERN =
   /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u;
 const SPONSOR_ICON_DATA_PATTERN =
@@ -65,6 +67,7 @@ export type SponsorClaim = {
   grantExpiresAt: number;
   grantTokenHash: string;
   grantWalletKey: string;
+  operationFingerprintHash: string | null;
   policyVersion: number;
   providerResponseJson: string | null;
   requestFingerprintHash: string | null;
@@ -95,6 +98,7 @@ export type SponsorProxyRepository = {
     grantWalletKey: string;
     method: ValidatedPaymasterRequest["method"];
     now: number;
+    operationFingerprintHash: string;
     policyVersion: number;
   }): Promise<boolean>;
 };
@@ -268,6 +272,51 @@ function requestFingerprint(request: ValidatedPaymasterEnvelope): Promise<string
     canonicalJson({
       method: request.method,
       params: params.slice(0, 3)
+    })
+  );
+}
+
+/**
+ * Stable identity for one sponsored wallet operation.
+ *
+ * Gas, signature, paymaster fields and additive wallet-managed fields are
+ * intentionally excluded because ERC-7677 may change them between stub and
+ * final calls. sender + chain + EntryPoint + nonce + callData are sufficient
+ * to distinguish a different BaseStamp Create while remaining wallet-version
+ * tolerant.
+ */
+function operationFingerprint(
+  request: ValidatedPaymasterEnvelope
+): Promise<string> {
+  const params = request.raw.params;
+  if (
+    !Array.isArray(params) ||
+    params.length !== 4 ||
+    !isRecord(params[0]) ||
+    typeof params[1] !== "string"
+  ) {
+    rejectSponsorship();
+  }
+
+  const userOperation = params[0];
+  const nonce = userOperation.nonce;
+  const callData = userOperation.callData;
+  if (
+    typeof nonce !== "string" ||
+    !HEX_QUANTITY_PATTERN.test(nonce) ||
+    typeof callData !== "string" ||
+    !HEX_BYTES_PATTERN.test(callData)
+  ) {
+    rejectSponsorship();
+  }
+
+  return sha256Hex(
+    canonicalJson({
+      callData: callData.toLowerCase(),
+      chainId: request.chainId,
+      entryPoint: params[1].toLowerCase(),
+      nonce: BigInt(nonce).toString(10),
+      sender: request.sender.toLowerCase()
     })
   );
 }
@@ -753,6 +802,7 @@ export async function proxyPaymasterRequest(
     request.sender
   );
   const fingerprintHash = await requestFingerprint(request);
+  const operationFingerprintHash = await operationFingerprint(request);
   const reservationDeadline =
     Date.now() + RESERVATION_WAIT_TIMEOUT_MS;
 
@@ -769,6 +819,19 @@ export async function proxyPaymasterRequest(
       console.warn(JSON.stringify({
         event: "sponsor_proxy_rejected",
         stage: "grant_authorization",
+        method: request.method,
+        chainId: request.chainId
+      }));
+      rejectSponsorship();
+    }
+
+    if (
+      claim.operationFingerprintHash !== null &&
+      claim.operationFingerprintHash !== operationFingerprintHash
+    ) {
+      console.warn(JSON.stringify({
+        event: "sponsor_proxy_rejected",
+        stage: "operation_binding",
         method: request.method,
         chainId: request.chainId
       }));
@@ -827,6 +890,7 @@ export async function proxyPaymasterRequest(
         grantWalletKey,
         method: request.method,
         now,
+        operationFingerprintHash,
         policyVersion: config.policyVersion
       });
 
@@ -906,6 +970,7 @@ type SponsorClaimRow = {
   grant_expires_at: number;
   grant_token_hash: string;
   grant_wallet_key: string;
+  operation_fingerprint_hash: string | null;
   policy_version: number;
   provider_response_json: string | null;
   request_fingerprint_hash: string | null;
@@ -922,6 +987,7 @@ function mapClaim(row: SponsorClaimRow | null): SponsorClaim | null {
     grantExpiresAt: row.grant_expires_at,
     grantTokenHash: row.grant_token_hash,
     grantWalletKey: row.grant_wallet_key,
+    operationFingerprintHash: row.operation_fingerprint_hash,
     policyVersion: row.policy_version,
     providerResponseJson: row.provider_response_json,
     requestFingerprintHash: row.request_fingerprint_hash,
@@ -938,9 +1004,10 @@ export function createD1SponsorProxyRepository(
     async findClaim(claimId) {
       const row = await database.prepare(
         "SELECT action, chain_id, grant_expires_at, grant_token_hash, " +
-          "grant_wallet_key, policy_version, provider_response_json, " +
-          "request_fingerprint_hash, status, stub_fingerprint_hash, " +
-          "stub_response_json FROM sponsor_claims WHERE claim_id = ?"
+          "grant_wallet_key, operation_fingerprint_hash, policy_version, " +
+          "provider_response_json, request_fingerprint_hash, status, " +
+          "stub_fingerprint_hash, stub_response_json FROM sponsor_claims " +
+          "WHERE claim_id = ?"
       )
         .bind(claimId)
         .first<SponsorClaimRow>();
@@ -949,9 +1016,10 @@ export function createD1SponsorProxyRepository(
 
     async reserve(reservation) {
       /*
-       * One wallet transaction can issue multiple ERC-7677 RPCs. This
-       * conditional update is the only runtime reservation: D1 serializes the
-       * write and exactly one request can move the claim to `requested`.
+       * One wallet transaction can issue multiple ERC-7677 RPCs. D1 binds the
+       * first request to a stable operation fingerprint and serializes each
+       * provider call. Later stub/final retries may change gas fields but may
+       * not switch to a different sender nonce/callData operation.
        */
       const acquired = await database.prepare(
         "UPDATE sponsor_claims SET status = 'requested', " +
@@ -959,22 +1027,28 @@ export function createD1SponsorProxyRepository(
           "request_ip_bucket_key = NULL, request_day_start = NULL, " +
           "request_month_start = NULL, request_method = ?, " +
           "request_fingerprint_hash = ?, requested_at = ?, " +
+          "operation_fingerprint_hash = COALESCE(" +
+          "operation_fingerprint_hash, ?), " +
           "terminal_at = CASE WHEN sponsored_at IS NULL THEN NULL " +
           "ELSE terminal_at END " +
           "WHERE claim_id = ? AND status IN " +
           "('grant_issued', 'denied', 'sponsored') " +
           "AND grant_token_hash = ? AND grant_wallet_key = ? " +
-          "AND policy_version = ? AND grant_expires_at > ?"
+          "AND policy_version = ? AND grant_expires_at > ? " +
+          "AND (operation_fingerprint_hash IS NULL " +
+          "OR operation_fingerprint_hash = ?)"
       )
         .bind(
           reservation.method,
           reservation.fingerprintHash,
           reservation.now,
+          reservation.operationFingerprintHash,
           reservation.claimId,
           reservation.grantTokenHash,
           reservation.grantWalletKey,
           reservation.policyVersion,
-          reservation.now
+          reservation.now,
+          reservation.operationFingerprintHash
         )
         .run();
       return acquired.meta.changes === 1;
