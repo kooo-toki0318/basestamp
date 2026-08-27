@@ -110,6 +110,7 @@ async function createClaim(
       84532,
       SENDER
     ),
+    operationFingerprintHash: null,
     policyVersion: 2,
     providerResponseJson: null,
     requestFingerprintHash: null,
@@ -132,6 +133,13 @@ function createRepository(
   const repository: SponsorProxyRepository = {
     findClaim: () => Promise.resolve(current),
     reserve(reservation) {
+      if (
+        current.operationFingerprintHash !== null &&
+        current.operationFingerprintHash !== reservation.operationFingerprintHash
+      ) {
+        events.push("operation-mismatch");
+        return Promise.resolve(false);
+      }
       if (remainingBusyReservations > 0) {
         remainingBusyReservations -= 1;
         events.push("busy");
@@ -142,6 +150,8 @@ function createRepository(
       resumeStatus = current.status === "sponsored" ? "sponsored" : "grant_issued";
       current = {
         ...current,
+        operationFingerprintHash:
+          current.operationFingerprintHash ?? reservation.operationFingerprintHash,
         requestFingerprintHash: reservation.fingerprintHash,
         status: "requested"
       };
@@ -304,6 +314,53 @@ describe("Paymaster proxy", () => {
     expect(memory.events).toEqual([
       "reserve",
       "sponsored",
+      "reserve",
+      "sponsored"
+    ]);
+  });
+
+  it("rejects the same grant for a different operation from the same sender", async () => {
+    const memory = createRepository(await createClaim());
+
+    await proxyPaymasterRequest({
+      accountVerifier: () => Promise.resolve(),
+      env,
+      now: NOW,
+      provider: () => Promise.resolve({
+        jsonrpc: "2.0",
+        id: 7,
+        result: { paymasterAndData: PAYMASTER_AND_DATA }
+      }),
+      repository: memory.repository,
+      request: createRequest()
+    });
+
+    const secondRequest = createRequest();
+    const secondUserOperation =
+      secondRequest.params[0] as Record<string, unknown>;
+    secondUserOperation.callData = "0xdeadbeef";
+    let externalCalls = 0;
+
+    await expect(proxyPaymasterRequest({
+      accountVerifier: () => {
+        externalCalls += 1;
+        return Promise.resolve();
+      },
+      env,
+      now: NOW,
+      provider: () => {
+        externalCalls += 1;
+        return Promise.resolve({});
+      },
+      repository: memory.repository,
+      request: secondRequest
+    })).rejects.toMatchObject({
+      code: "sponsor_request_rejected",
+      status: 403
+    });
+
+    expect(externalCalls).toBe(0);
+    expect(memory.events).toEqual([
       "reserve",
       "sponsored"
     ]);
