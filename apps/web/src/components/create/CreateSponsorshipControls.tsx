@@ -1,5 +1,10 @@
+import { useQuery } from "@tanstack/react-query";
+import { useConnection } from "wagmi";
 import type { CreateFundingMode } from "../../create-wallet-state";
 import { useI18n } from "../../i18n-context";
+import { isSupportedChainId } from "../../lib/networks";
+import { getDeploymentPublicClient } from "../../lib/onchain";
+import { classifySponsorWalletBytecode } from "../../sponsor-wallet-setup";
 import { TurnstileWidget } from "../TurnstileWidget";
 
 type CreateSponsorshipControlsProperties = {
@@ -34,6 +39,36 @@ export function CreateSponsorshipControls({
   onTurnstileTokenChange
 }: CreateSponsorshipControlsProperties) {
   const { t } = useI18n();
+  const { address, chainId, connector } = useConnection();
+  const supportedChainId =
+    chainId !== undefined && isSupportedChainId(chainId) ? chainId : undefined;
+  const shouldCheckWalletSetup =
+    fundingMode === "sponsored" &&
+    !walletFeeChosen &&
+    !sponsorshipCapabilityChecking &&
+    !sponsorshipCapabilityUnavailable &&
+    address !== undefined &&
+    supportedChainId !== undefined &&
+    (connector?.id === "baseAccount" || connector?.id === "injected");
+  const walletSetupQuery = useQuery({
+    queryKey: ["sponsor-wallet-setup", supportedChainId, address],
+    queryFn: async () => {
+      if (address === undefined || supportedChainId === undefined) {
+        return "unknown" as const;
+      }
+      const bytecode = await getDeploymentPublicClient(
+        supportedChainId
+      ).getBytecode({ address });
+      return classifySponsorWalletBytecode(bytecode);
+    },
+    enabled: shouldCheckWalletSetup,
+    staleTime: 30_000
+  });
+  const walletSetupChecking =
+    shouldCheckWalletSetup && walletSetupQuery.fetchStatus === "fetching";
+  const walletSetupMayBeRequired =
+    shouldCheckWalletSetup &&
+    walletSetupQuery.data === "setup-may-be-required";
 
   if (sponsorshipCapabilityChecking) {
     return (
@@ -88,14 +123,30 @@ export function CreateSponsorshipControls({
         <span>{t("create.sponsorTitle")}</span>
         <strong>
           {fundingMode === "sponsored"
-            ? t("create.sponsorReady")
+            ? walletSetupChecking
+              ? t("create.walletSetupChecking")
+              : walletSetupMayBeRequired
+                ? t("create.walletSetupMayBeRequired")
+                : t("create.sponsorReady")
             : t("create.walletFeeSelected")}
         </strong>
       </div>
 
       {fundingMode === "sponsored" ? (
         <>
-          {!sponsorGrantReady && (
+          {walletSetupChecking && (
+            <div className="sponsor-capability-progress" role="status">
+              <span className="confirmation-spinner compact" aria-hidden="true" />
+              <span>{t("create.walletSetupChecking")}</span>
+            </div>
+          )}
+          {walletSetupMayBeRequired && (
+            <div className="notice" role="status">
+              <strong>{t("create.walletSetupTitle")}</strong>
+              <p>{t("create.walletSetupBody")}</p>
+            </div>
+          )}
+          {!walletSetupChecking && !sponsorGrantReady && (
             <TurnstileWidget
               accessibleLabel={t("create.sponsorCheckLabel")}
               onError={onTurnstileError}
