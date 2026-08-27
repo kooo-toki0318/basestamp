@@ -2,7 +2,13 @@ import { coreApp } from "./app";
 import { runCoreCleanupSafely } from "./cleanup";
 import { handleConnectedSponsorGrant } from "./connected-sponsor-grant";
 
-type SponsorOriginClass = "allowed" | "missing" | "other";
+type SponsorOriginClass =
+  | "base-app"
+  | "basestamp-app"
+  | "configured"
+  | "keys-coinbase"
+  | "missing"
+  | "other";
 type SponsorRpcMethod =
   | "pm_getAcceptedPaymentTokens"
   | "pm_getPaymasterData"
@@ -12,13 +18,16 @@ type SponsorRpcMethod =
 function classifySponsorOrigin(request: Request, env: Env): SponsorOriginClass {
   const origin = request.headers.get("Origin");
   if (origin === null) return "missing";
+  if (origin === "https://keys.coinbase.com") return "keys-coinbase";
+  if (origin === "https://base.app") return "base-app";
+  if (origin === env.SIWE_ALLOWED_ORIGIN) return "basestamp-app";
 
   const allowedOrigins = (env.SPONSOR_ALLOWED_ORIGINS ?? "")
     .split(",")
     .map((value) => value.trim())
     .filter((value) => value !== "");
 
-  return allowedOrigins.includes(origin) ? "allowed" : "other";
+  return allowedOrigins.includes(origin) ? "configured" : "other";
 }
 
 async function classifySponsorRpcMethod(request: Request): Promise<SponsorRpcMethod> {
