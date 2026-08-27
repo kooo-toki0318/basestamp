@@ -6,7 +6,6 @@
   "scripts": {
     "build": "vite build && node ../../scripts/sanitize-web-build.mjs",
     "cf-typegen": "wrangler types worker/env.d.ts --include-runtime false",
-    "deploy": "pnpm run build && wrangler deploy",
     "dev": "vite --host 0.0.0.0",
     "d1:migrate:local": "wrangler d1 migrations apply DB --local",
     "d1:migrations:list:local": "wrangler d1 migrations list DB --local",
@@ -29,7 +28,6 @@
   "devDependencies": {
     "@cloudflare/vite-plugin": "1.50.0",
     "@cloudflare/vitest-pool-workers": "0.19.1",
-    "@cloudflare/workers-types": "5.20260801.1",
     "@eslint/js": "10.0.1",
     "@types/node": "26.1.2",
     "@types/react": "19.2.18",
