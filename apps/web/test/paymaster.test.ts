@@ -536,6 +536,32 @@ describe("Paymaster proxy", () => {
     expect(memory.events).toEqual([]);
   });
 
+  it("rejects a grant replayed by a different UserOperation sender", async () => {
+    const memory = createRepository(await createClaim());
+    const request = createRequest();
+    const userOperation = request.params[0] as Record<string, unknown>;
+    userOperation.sender = "0x2222222222222222222222222222222222222222";
+    let externalCalls = 0;
+
+    await expect(proxyPaymasterRequest({
+      accountVerifier: () => {
+        externalCalls += 1;
+        return Promise.resolve();
+      },
+      env,
+      now: NOW,
+      provider: () => {
+        externalCalls += 1;
+        return Promise.resolve({});
+      },
+      repository: memory.repository,
+      request
+    })).rejects.toMatchObject({ code: "sponsor_request_rejected", status: 403 });
+
+    expect(externalCalls).toBe(0);
+    expect(memory.events).toEqual([]);
+  });
+
   it("caches a non-final stub response for the claim", async () => {
     const memory = createRepository(await createClaim());
     let providerCalls = 0;
