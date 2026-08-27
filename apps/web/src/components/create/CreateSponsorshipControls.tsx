@@ -51,10 +51,10 @@ export function CreateSponsorshipControls({
     supportedChainId !== undefined &&
     (connector?.id === "baseAccount" || connector?.id === "injected");
   const walletSetupQuery = useQuery({
-    queryKey: ["sponsor-wallet-setup", supportedChainId, address],
+    queryKey: ["sponsor-wallet-code", supportedChainId, address],
     queryFn: async () => {
       if (address === undefined || supportedChainId === undefined) {
-        return "unknown" as const;
+        return "code-present" as const;
       }
       const bytecode = await getDeploymentPublicClient(
         supportedChainId
@@ -66,9 +66,8 @@ export function CreateSponsorshipControls({
   });
   const walletSetupChecking =
     shouldCheckWalletSetup && walletSetupQuery.fetchStatus === "fetching";
-  const walletSetupMayBeRequired =
-    shouldCheckWalletSetup &&
-    walletSetupQuery.data === "setup-may-be-required";
+  const walletHasNoCode =
+    shouldCheckWalletSetup && walletSetupQuery.data === "no-code";
 
   if (sponsorshipCapabilityChecking) {
     return (
@@ -125,7 +124,7 @@ export function CreateSponsorshipControls({
           {fundingMode === "sponsored"
             ? walletSetupChecking
               ? t("create.walletSetupChecking")
-              : walletSetupMayBeRequired
+              : walletHasNoCode
                 ? t("create.walletSetupMayBeRequired")
                 : t("create.sponsorReady")
             : t("create.walletFeeSelected")}
@@ -140,7 +139,7 @@ export function CreateSponsorshipControls({
               <span>{t("create.walletSetupChecking")}</span>
             </div>
           )}
-          {walletSetupMayBeRequired && (
+          {walletHasNoCode && (
             <div className="notice" role="status">
               <strong>{t("create.walletSetupTitle")}</strong>
               <p>{t("create.walletSetupBody")}</p>
