@@ -33,7 +33,7 @@ function classifySponsorOrigin(request: Request, env: Env): SponsorOriginClass {
 async function classifySponsorRpcMethod(request: Request): Promise<SponsorRpcMethod> {
   if (request.method !== "POST") return "other";
   try {
-    const value = (await request.clone().json()) as unknown;
+    const value = await request.clone().json();
     if (typeof value !== "object" || value === null || Array.isArray(value)) {
       return "other";
     }
