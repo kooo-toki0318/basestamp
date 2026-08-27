@@ -12,15 +12,9 @@ import "./brand-polish.css";
 import "./information.css";
 import "./ux-fixes.css";
 import "./release-polish.css";
-import "./create-route.css";
 import { queryClient, wagmiConfig } from "./wagmi";
 
 captureHandoffFragment();
-
-document.body.classList.toggle(
-  "basestamp-create-route",
-  window.location.pathname === "/create" || window.location.pathname === "/create/"
-);
 
 const root = document.getElementById("root");
 if (root === null) throw new Error("Application root is missing.");
