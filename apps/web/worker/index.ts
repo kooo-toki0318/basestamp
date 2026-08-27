@@ -22,7 +22,7 @@ function classifySponsorOrigin(request: Request, env: Env): SponsorOriginClass {
   if (origin === "https://base.app") return "base-app";
   if (origin === env.SIWE_ALLOWED_ORIGIN) return "basestamp-app";
 
-  const allowedOrigins = (env.SPONSOR_ALLOWED_ORIGINS ?? "")
+  const allowedOrigins = env.SPONSOR_ALLOWED_ORIGINS
     .split(",")
     .map((value) => value.trim())
     .filter((value) => value !== "");
@@ -33,11 +33,11 @@ function classifySponsorOrigin(request: Request, env: Env): SponsorOriginClass {
 async function classifySponsorRpcMethod(request: Request): Promise<SponsorRpcMethod> {
   if (request.method !== "POST") return "other";
   try {
-    const value: unknown = await request.clone().json();
+    const value = (await request.clone().json()) as unknown;
     if (typeof value !== "object" || value === null || Array.isArray(value)) {
       return "other";
     }
-    const method = Reflect.get(value, "method");
+    const method: unknown = (value as Record<string, unknown>).method;
     if (
       method === "pm_getAcceptedPaymentTokens" ||
       method === "pm_getPaymasterData" ||
