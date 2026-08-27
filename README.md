@@ -279,12 +279,15 @@ The current Mainnet beta disclosures are available at [legal notice](https://bas
 [terms](https://basestamp-web.ndun000.workers.dev/terms), and
 [security](https://basestamp-web.ndun000.workers.dev/security).
 
-BaseStamp's custom Workers Logs contain only fixed application-error events and,
-for HTTP failures, the method and a bounded route class. Scheduled rejections
-are contained. Invocation logs and automatic traces are disabled; BaseStamp
-does not add request values, full paths, IPs, signatures, tokens, or confidential
-provider URLs to custom logs. Cloudflare can still process platform and edge
-metadata under its own service boundary.
+BaseStamp's custom Workers Logs contain only bounded application events. Sponsor
+proxy diagnostics record only the HTTP method, a fixed origin class, a fixed
+ERC-7677 RPC-method class, and the response status; they never record the raw
+Origin, wallet address, claim ID, grant token, request payload, or provider URL.
+For other HTTP failures, BaseStamp records the method and a bounded route class.
+Scheduled rejections are contained. Invocation logs and automatic traces are
+disabled; BaseStamp does not add request values, full paths, IPs, signatures,
+tokens, or confidential provider URLs to custom logs. Cloudflare can still
+process platform and edge metadata under its own service boundary.
 
 ### Production Worker authentication and deployment
 
