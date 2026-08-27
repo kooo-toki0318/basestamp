@@ -202,7 +202,6 @@ export function CreatePage({
   connectorId,
   walletChainId,
   selectedChainId,
-  session,
   authBusy,
   baseSignInAvailable,
   browserSignInAvailable,
@@ -258,22 +257,19 @@ export function CreatePage({
       });
   }, [t]);
 
-  const authenticatedAddress =
-    session.authenticated && address !== undefined
-      ? isAddressEqual(getAddress(session.walletAddress), address) &&
-        session.chainId === selectedChainId
-      : false;
+  const connectedAddressReady =
+    address !== undefined && walletChainId === selectedChainId;
   const walletState = getCreateWalletState(
     address !== undefined,
     walletChainId,
     selectedChainId,
-    authenticatedAddress
+    connectedAddressReady
   );
   const readyToRecord = walletState === "ready";
   const sponsorshipConfigured =
     sponsorshipEnabled &&
     registryAvailable &&
-    connectorId === "baseAccount" &&
+    (connectorId === "baseAccount" || connectorId === "injected") &&
     turnstileSiteKey !== undefined &&
     builderAttribution !== undefined;
   const {
@@ -482,7 +478,7 @@ export function CreatePage({
       pendingConfirmation === undefined &&
       (prepared === undefined ||
         address === undefined ||
-        !authenticatedAddress)
+        !connectedAddressReady)
     ) {
       setStatus(t("create.status.signInRequired"));
       return;
@@ -555,7 +551,8 @@ export function CreatePage({
               {
                 chainId: deployment.chainId,
                 idempotencyKey: sponsorIdempotencyKey,
-                turnstileToken
+                turnstileToken,
+                walletAddress: address
               },
               t
             );

@@ -1,3 +1,4 @@
+import type { Address } from "viem";
 import { postJson } from "./api-client";
 import {
   createBuilderAttribution,
@@ -14,6 +15,7 @@ export type SponsorGrantRequest = {
   chainId: SupportedChainId;
   idempotencyKey?: string;
   turnstileToken: string;
+  walletAddress: Address;
 };
 
 export function requestSponsorGrant(
@@ -21,12 +23,13 @@ export function requestSponsorGrant(
   t: Translate
 ): Promise<SponsorGrantResponse> {
   return postJson<SponsorGrantResponse>(
-    "/api/sponsor/grant",
+    "/api/sponsor/connected-grant",
     {
       chainId: request.chainId,
       idempotencyKey:
         request.idempotencyKey ?? createSponsorIdempotencyKey(),
-      turnstileToken: request.turnstileToken
+      turnstileToken: request.turnstileToken,
+      walletAddress: request.walletAddress
     },
     t
   );

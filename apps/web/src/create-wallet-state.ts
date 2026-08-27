@@ -1,8 +1,4 @@
-export type CreateWalletState =
-  | "disconnected"
-  | "wrong-network"
-  | "authentication-required"
-  | "ready";
+export type CreateWalletState = "disconnected" | "wrong-network" | "ready";
 
 export type CreateConfirmationState = "idle" | "confirming" | "retry";
 
@@ -17,11 +13,12 @@ export function getCreateWalletState(
   connected: boolean,
   walletChainId: number | undefined,
   selectedChainId: number,
-  authenticated: boolean
+  legacyAuthenticationState?: boolean
 ): CreateWalletState {
+  void legacyAuthenticationState;
   if (!connected) return "disconnected";
   if (walletChainId !== selectedChainId) return "wrong-network";
-  return authenticated ? "ready" : "authentication-required";
+  return "ready";
 }
 
 export function getCreateConfirmationState(

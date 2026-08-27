@@ -89,7 +89,7 @@ export function CreateSubmitPanel({
             {t(
               walletState === "wrong-network"
                 ? "create.networkHint"
-                : "create.signInHint",
+                : "create.walletMissing",
               { network: selectedNetworkName }
             )}
           </p>

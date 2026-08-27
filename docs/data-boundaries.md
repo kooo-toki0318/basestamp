@@ -22,14 +22,28 @@ JSON contains the signed commitment and challenge, but not the content salt.
 ## Core Worker
 
 The Worker accepts only bounded authentication payloads, stamp IDs, one-time
-acknowledgement nonces, wallet signatures, Turnstile grant requests, and strict
-ERC-7677 Paymaster JSON-RPC payloads. It must
-not log request bodies, wallet signatures, session tokens, cookies, raw IP
-addresses, secrets, or authorization headers. Runtime configuration fixes the
-allowed SIWE domain, origin, and Base chain; request headers do not choose them.
-The Worker reads the Registry independently, binds each handoff challenge to the
-authenticated wallet and selected supported Base-chain session, and never
-claims to have observed the browser-local file match.
+acknowledgement nonces, wallet signatures, Turnstile-backed sponsor-grant
+requests, and bounded ERC-7677 Paymaster JSON-RPC payloads. It must not log
+request bodies, wallet signatures, session tokens, cookies, raw IP addresses,
+secrets, or authorization headers. Runtime configuration fixes the allowed
+SIWE domain, origin, and Base chains; request headers do not choose them.
+
+Create sponsorship does not rely on a SIWE session. Its connected-grant endpoint
+accepts a wallet address supplied by the browser only after exact-Origin and
+Turnstile checks, then derives a short-lived wallet-and-chain-bound grant. The
+Paymaster route does not trust that browser assertion as proof of ownership: it
+re-derives the wallet grant key from the actual ERC-7677 UserOperation sender
+and rejects a mismatch before forwarding to CDP. The first Paymaster RPC also
+binds the claim to a stable operation fingerprint containing sender, chain,
+EntryPoint, nonce, and callData. Gas, signature, paymaster fields, and additive
+wallet-managed fields are deliberately excluded so stub/final retries for one
+operation remain compatible with ERC-7677 wallet behavior.
+
+Handoff remains session-authenticated. The Worker reads the Registry
+independently, binds each handoff challenge to the authenticated wallet and
+selected supported Base-chain session, and never claims to have observed the
+browser-local file match.
+
 Persisted invocation logs are disabled. Application error paths emit only a
 fixed event name and, for HTTP errors, the method and bounded route class;
 scheduled-cleanup failures emit only a fixed event. BaseStamp does not put
@@ -59,8 +73,8 @@ with a stamp ID, statement version, wallet, chain, expiry, and use time. No tabl
 may contain file bytes, file metadata, a content salt, free text, a raw IP
 address, or a raw session token. Sponsor claims retain only bounded grant and
 claim state, hashed tokens, wallet/chain binding, idempotency and request
-fingerprints, concurrency state, and minimal Paymaster response data.
-The deployed Registry is the canonical source for
+fingerprints, the stable operation fingerprint, concurrency state, and minimal
+Paymaster response data. The deployed Registry is the canonical source for
 stamps; `stamp_refs` is only short-lived UI reference state.
 
 `quota_counters`, `rate_limit_buckets`, `sponsor_wallet_allowlist`, and
@@ -81,7 +95,7 @@ Core retention is enforced hourly:
 | Active or revoked sessions | 48 hours after expiry or revocation |
 | Stamp UI references | 7 days after creation |
 | Handoff challenges | 48 hours after expiry |
-| Sponsor grants, claims, request fingerprints, concurrency state, and minimal CDP responses | 30 days after terminal state |
+| Sponsor grants, claims, request/operation fingerprints, concurrency state, and minimal CDP responses | 30 days after terminal state |
 | Legacy daily counter or bucket rows, if present | 48 hours after their recorded period |
 | Legacy monthly counter rows, if present | 62 days after their recorded month |
 | Legacy test-wallet allowlist rows | Until their mandatory expiry |

@@ -768,7 +768,8 @@ export function App() {
                 >
                   {t("auth.switchTo", { network: selectedNetwork.name })}
                 </button>
-              ) : sessionLoaded &&
+              ) : handoffRoute !== undefined &&
+                sessionLoaded &&
                 !authenticatedConnection &&
                 activeConnector !== undefined ? (
                 <button

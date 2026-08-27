@@ -54,7 +54,6 @@ export function createSponsoredStampCall(
         optional: false as const,
         url: paymasterUrl.href
       }
-    },
-        forceAtomic: true as const
+    }
   };
 }

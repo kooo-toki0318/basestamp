@@ -7,6 +7,7 @@ import {
 } from "react";
 import {
   I18nContext,
+  type MessageKey,
   type Translate,
   type TranslationValues
 } from "./i18n-context";
@@ -15,14 +16,25 @@ import {
   isLocale,
   type Locale
 } from "./locale";
-import { enMessages, type MessageKey } from "./locales/en";
+import { baseAccountSetupCopy } from "./locales/base-account-setup-copy";
+import { enMessages } from "./locales/en";
 import { jaMessages } from "./locales/ja";
 import { productCopy } from "./locales/product-copy";
 import { releaseCopy } from "./locales/release-copy";
 
 const catalogs: Record<Locale, Record<MessageKey, string>> = {
-  en: { ...enMessages, ...productCopy.en, ...releaseCopy.en },
-  ja: { ...jaMessages, ...productCopy.ja, ...releaseCopy.ja }
+  en: {
+    ...enMessages,
+    ...productCopy.en,
+    ...releaseCopy.en,
+    ...baseAccountSetupCopy.en
+  },
+  ja: {
+    ...jaMessages,
+    ...productCopy.ja,
+    ...releaseCopy.ja,
+    ...baseAccountSetupCopy.ja
+  }
 };
 const STORAGE_KEY = "basestamp.locale";
 
