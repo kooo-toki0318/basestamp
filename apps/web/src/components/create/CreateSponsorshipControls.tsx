@@ -7,6 +7,17 @@ import { getDeploymentPublicClient } from "../../lib/onchain";
 import { classifySponsorWalletBytecode } from "../../sponsor-wallet-setup";
 import { TurnstileWidget } from "../TurnstileWidget";
 
+type BaseInjectedProvider = {
+  isBase?: boolean;
+  isCoinbaseWallet?: boolean;
+};
+
+function isBaseProvider(provider: unknown): boolean {
+  if (typeof provider !== "object" || provider === null) return false;
+  const candidate = provider as BaseInjectedProvider;
+  return candidate.isBase === true || candidate.isCoinbaseWallet === true;
+}
+
 type CreateSponsorshipControlsProperties = {
   busy: boolean;
   fundingMode: CreateFundingMode;
@@ -49,11 +60,19 @@ export function CreateSponsorshipControls({
     !sponsorshipCapabilityUnavailable &&
     address !== undefined &&
     supportedChainId !== undefined &&
-    (connector?.id === "baseAccount" || connector?.id === "injected");
+    connector !== undefined;
   const walletSetupQuery = useQuery({
-    queryKey: ["sponsor-wallet-code", supportedChainId, address],
+    queryKey: ["sponsor-wallet-code", connector?.uid, supportedChainId, address],
     queryFn: async () => {
-      if (address === undefined || supportedChainId === undefined) {
+      if (
+        address === undefined ||
+        supportedChainId === undefined ||
+        connector === undefined
+      ) {
+        return "code-present" as const;
+      }
+      const provider = await connector.getProvider();
+      if (connector.id !== "baseAccount" && !isBaseProvider(provider)) {
         return "code-present" as const;
       }
       const bytecode = await getDeploymentPublicClient(
