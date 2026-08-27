@@ -2,8 +2,22 @@ import { coreApp } from "./app";
 import { runCoreCleanupSafely } from "./cleanup";
 import { handleConnectedSponsorGrant } from "./connected-sponsor-grant";
 
+type SponsorOriginClass = "allowed" | "missing" | "other";
+
+function classifySponsorOrigin(request: Request, env: Env): SponsorOriginClass {
+  const origin = request.headers.get("Origin");
+  if (origin === null) return "missing";
+
+  const allowedOrigins = (env.SPONSOR_ALLOWED_ORIGINS ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter((value) => value !== "");
+
+  return allowedOrigins.includes(origin) ? "allowed" : "other";
+}
+
 export default {
-  fetch(request, env, context) {
+  async fetch(request, env, context) {
     const url = new URL(request.url);
     if (
       request.method === "POST" &&
@@ -11,6 +25,33 @@ export default {
     ) {
       return handleConnectedSponsorGrant(request, env);
     }
+
+    if (url.pathname === "/api/sponsor") {
+      const originClass = classifySponsorOrigin(request, env);
+      console.info(JSON.stringify({
+        event: "sponsor_proxy_request",
+        method: request.method,
+        originClass
+      }));
+      try {
+        const response = await coreApp.fetch(request, env, context);
+        console.info(JSON.stringify({
+          event: "sponsor_proxy_response",
+          method: request.method,
+          originClass,
+          status: response.status
+        }));
+        return response;
+      } catch (error) {
+        console.warn(JSON.stringify({
+          event: "sponsor_proxy_exception",
+          method: request.method,
+          originClass
+        }));
+        throw error;
+      }
+    }
+
     return coreApp.fetch(request, env, context);
   },
   scheduled(_controller, env, context) {
