@@ -22,9 +22,13 @@ portable JSON archive for later verification.
 
 1. Choose a file in the browser.
 2. Review its local preview and classification.
-3. Connect a wallet and sign in.
-4. Approve the Base transaction that records the salted commitment.
+3. Connect a wallet on the selected Base network.
+4. Approve the sponsored Base transaction, or explicitly choose the wallet-paid fallback.
 5. Save the downloaded BaseStamp verification JSON.
+
+Create does not require a standalone SIWE web session. The wallet authorizes the
+final onchain operation itself; sponsorship is separately gated by Turnstile and
+a short-lived grant bound to the wallet, chain, and one operation.
 
 The file bytes and file name are not sent to BaseStamp or written onchain.
 
@@ -86,12 +90,16 @@ Read the detailed [data boundaries](docs/data-boundaries.md),
 Receipt meaning and signature allowlist.
 
 The sponsorship path has independent public-build and Worker release gates.
-It is enabled for Base Mainnet and Base Sepolia. BaseStamp validates the
-authenticated session, one-time grant, wallet/chain binding, Registry call, and
-per-claim concurrency before proxying ERC-7677 requests to CDP. Eligibility,
-contract/function rules, and spend limits are controlled by the CDP Paymaster
-policy. A user must explicitly choose the wallet-paid path when sponsorship is
-unavailable; BaseStamp does not silently submit a paid transaction.
+It is enabled for Base Mainnet and Base Sepolia. Create sponsorship does not
+require a SIWE session: an exact-origin, Turnstile-verified grant is bound to the
+selected wallet and chain, then the Worker re-derives that binding from the
+actual ERC-7677 UserOperation sender. The first Paymaster RPC additionally
+binds the claim to one stable operation identity based on sender, chain,
+EntryPoint, nonce, and callData. Gas and wallet-managed preparation fields may
+change across ERC-7677 retries. Eligibility, contract/function rules, and spend
+limits remain controlled by the CDP Paymaster policy. A user must explicitly
+choose the wallet-paid path when sponsorship is unavailable; BaseStamp does not
+silently submit a paid transaction.
 
 ## Current release
 
@@ -102,11 +110,11 @@ verification paths continue to support Base Sepolia.
 
 Available:
 
-- browser wallet and Sign in with Base authentication;
-- Base Account authentication through the wallet_connect SIWE capability, with a manual SIWE fallback for injected wallets;
+- browser wallet connection for Create, with no standalone SIWE prerequisite;
+- Sign in with Base authentication for Handoff through the `wallet_connect` SIWE capability, with a manual SIWE fallback for injected wallets;
 - Japanese and English UI catalogs with request/browser-language initialization and a persisted explicit selector;
-- a shared handoff story on Home, Create, and Verify, with Create progress advancing from authentication to recording and sharing;
-- wallet-connect and authentication prompts on Create that disappear as each prerequisite is completed;
+- a shared handoff story on Home, Create, and Verify, with Create progress advancing from wallet connection to recording and sharing;
+- wallet-connect and network-readiness prompts on Create that disappear as each prerequisite is completed;
 - visible private handoff URL and copyable localized recipient instructions after recording;
 - a clear-and-restart verification JSON control that returns to the JSON picker on the Verify entry page, plus detailed match results;
 - automatic Base Sepolia/Base Mainnet wallet network switching;
@@ -114,9 +122,9 @@ Available:
 - local previews for common image, video, audio, PDF, and text formats;
 - salted SHA-256 commitments calculated in a browser worker;
 - wallet-confirmed Base Mainnet and Base Sepolia Registry transactions, with Base Account sponsorship and an explicit wallet-paid alternative;
-- Turnstile-gated, wallet- and chain-bound sponsorship grants and a Worker Paymaster proxy with strict UserOperation validation, per-claim concurrency locking, and retention cleanup;
+- Turnstile-gated, wallet- and chain-bound sponsorship grants and a Worker Paymaster proxy with sender re-binding, one-operation binding, per-claim concurrency locking, and retention cleanup;
 - real-D1 concurrency coverage proving that one claim admits only one active
-  Paymaster RPC reservation while repeated ERC-7677 requests are not counted
+  Paymaster RPC reservation while repeated ERC-7677 requests for the same operation are not counted
   as separate transactions;
 - automatic verification-package download;
 - private fragment handoff URLs with explicit copy, Web Share, and local QR;
@@ -254,9 +262,10 @@ resource, secret, provider-policy, budget, and release gates have completed.
 The browser-facing Paymaster proxy accepts CORS only from the exact Base
 Account popup origins listed in `SPONSOR_ALLOWED_ORIGINS`; the current
 production value is `https://keys.coinbase.com`. This is a non-secret
-allowlist, not an authentication control: every request still requires a
-short-lived grant and passes server-side grant, wallet/chain binding, and call
-validation. Sponsorship eligibility and provider-side limits are set in CDP.
+allowlist, not an authentication control: every Paymaster request still
+requires a short-lived grant and passes server-side wallet/chain and
+one-operation binding before provider forwarding. Sponsorship eligibility and
+provider-side limits are set in CDP.
 
 The `/security` page and `/.well-known/security.txt` use the repository's
 enabled GitHub Private Vulnerability Reporting channel. Both
@@ -277,9 +286,9 @@ does not add request values, full paths, IPs, signatures, tokens, or confidentia
 provider URLs to custom logs. Cloudflare can still process platform and edge
 metadata under its own service boundary.
 
-### Production Worker authentication
+### Production Worker authentication and deployment
 
-SIWE fails closed unless the deployed Worker has all of the following:
+Handoff SIWE fails closed unless the deployed Worker has all of the following:
 
 - an exact `SIWE_ALLOWED_DOMAIN` and `SIWE_ALLOWED_ORIGIN` in
   `apps/web/wrangler.jsonc`;
@@ -287,8 +296,14 @@ SIWE fails closed unless the deployed Worker has all of the following:
 - a remote D1 migration;
 - a `SESSION_HASH_SECRET` stored as a Cloudflare encrypted secret.
 
-From `apps/web`, configure a randomly generated secret interactively, then
-deploy. Never pass the secret on the command line or commit it.
+Create does not use that SIWE session as a prerequisite, but it shares the same
+Worker and D1 deployment. Apply all pending D1 migrations before deploying new
+Worker code; in particular, the operation-binding Worker must not be deployed
+before migration `0006_sponsor_operation_binding.sql`.
+
+From `apps/web`, configure a randomly generated session secret interactively
+when needed, apply migrations, then deploy. Never pass secrets on the command
+line or commit them.
 
 ```bash
 pnpm exec wrangler d1 migrations apply DB --remote
