@@ -17,5 +17,5 @@
       "vitest"
     ]
   },
-  "include": ["worker", "test", "test-d1", "src/lib", "src/locales", "src/locale.ts", "src/auth-client.ts", "src/locale-negotiation.ts", "src/handoff-role.ts", "src/create-wallet-state.ts", "src/builder-attribution.ts", "src/sponsored-stamp.ts", "src/public-pages.ts", "src/workers"]
+  "include": ["worker", "test", "test-d1", "src/lib", "src/locales", "src/locale.ts", "src/auth-client.ts", "src/locale-negotiation.ts", "src/handoff-role.ts", "src/create-wallet-state.ts", "src/builder-attribution.ts", "src/sponsored-stamp.ts", "src/sponsor-wallet-setup.ts", "src/public-pages.ts", "src/workers"]
 }
