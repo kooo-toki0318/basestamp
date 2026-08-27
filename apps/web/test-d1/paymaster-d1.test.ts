@@ -12,10 +12,12 @@ type ClaimFixture = {
   claimId: string;
   fingerprintHash: string;
   grantTokenHash: string;
+  operationFingerprintHash: string;
   walletKey: string;
 };
 
 type ClaimStateRow = {
+  operation_fingerprint_hash: string | null;
   request_fingerprint_hash: string | null;
   request_ip_bucket_key: string | null;
   request_method: string | null;
@@ -32,6 +34,7 @@ function fixture(id: string, seed: number): ClaimFixture {
     claimId: id,
     fingerprintHash: value64(seed + 100),
     grantTokenHash: value64(seed + 200),
+    operationFingerprintHash: value64(seed + 300),
     walletKey: WALLET_KEY
   };
 }
@@ -60,7 +63,8 @@ function reserve(
   repository: ReturnType<typeof createD1SponsorProxyRepository>,
   claim: ClaimFixture,
   method: "pm_getPaymasterData" | "pm_getPaymasterStubData" =
-    "pm_getPaymasterData"
+    "pm_getPaymasterData",
+  operationFingerprintHash = claim.operationFingerprintHash
 ): Promise<boolean> {
   return repository.reserve({
     claimId: claim.claimId,
@@ -69,6 +73,7 @@ function reserve(
     grantWalletKey: claim.walletKey,
     method,
     now: NOW,
+    operationFingerprintHash,
     policyVersion: 2
   });
 }
@@ -76,8 +81,8 @@ function reserve(
 async function readClaim(claimId: string): Promise<ClaimStateRow> {
   const row = await env.DB.prepare(
     "SELECT status, reserved_wallet_key, request_ip_bucket_key, " +
-      "request_method, request_fingerprint_hash FROM sponsor_claims " +
-      "WHERE claim_id = ?"
+      "request_method, request_fingerprint_hash, operation_fingerprint_hash " +
+      "FROM sponsor_claims WHERE claim_id = ?"
   )
     .bind(claimId)
     .first<ClaimStateRow>();
@@ -116,6 +121,7 @@ describe("Paymaster D1 claim reservation", () => {
     expect(attempts.filter(Boolean)).toHaveLength(1);
     expect(attempts.filter((value) => !value)).toHaveLength(4);
     expect(await readClaim(claim.claimId)).toMatchObject({
+      operation_fingerprint_hash: claim.operationFingerprintHash,
       request_fingerprint_hash: claim.fingerprintHash,
       request_ip_bucket_key: null,
       request_method: "pm_getPaymasterData",
@@ -143,6 +149,7 @@ describe("Paymaster D1 claim reservation", () => {
     });
 
     expect(await readClaim(claim.claimId)).toEqual({
+      operation_fingerprint_hash: claim.operationFingerprintHash,
       request_fingerprint_hash: null,
       request_ip_bucket_key: null,
       request_method: null,
@@ -150,6 +157,28 @@ describe("Paymaster D1 claim reservation", () => {
       status: "grant_issued"
     });
     expect(await runtimeQuotaRows()).toBe(0);
+  });
+
+  it("keeps one claim bound to the first wallet operation", async () => {
+    const repository = createD1SponsorProxyRepository(env.DB);
+    const claim = fixture("claim-operation-binding", 2_500);
+    await seedClaim(claim);
+
+    expect(await reserve(repository, claim)).toBe(true);
+    await repository.release(claim.claimId);
+
+    expect(
+      await reserve(
+        repository,
+        claim,
+        "pm_getPaymasterData",
+        value64(99_999)
+      )
+    ).toBe(false);
+    expect(await readClaim(claim.claimId)).toMatchObject({
+      operation_fingerprint_hash: claim.operationFingerprintHash,
+      status: "grant_issued"
+    });
   });
 
   it("marks final Paymaster data sponsored without incrementing transaction counters", async () => {
@@ -170,6 +199,7 @@ describe("Paymaster D1 claim reservation", () => {
     });
 
     expect(await readClaim(claim.claimId)).toMatchObject({
+      operation_fingerprint_hash: claim.operationFingerprintHash,
       status: "sponsored"
     });
     expect(await runtimeQuotaRows()).toBe(0);
@@ -194,6 +224,7 @@ describe("Paymaster D1 claim reservation", () => {
     await repository.release(claim.claimId);
 
     expect(await readClaim(claim.claimId)).toEqual({
+      operation_fingerprint_hash: claim.operationFingerprintHash,
       request_fingerprint_hash: null,
       request_ip_bucket_key: null,
       request_method: null,
@@ -221,6 +252,7 @@ describe("Paymaster D1 claim reservation", () => {
     await repository.release(claim.claimId);
 
     expect(await readClaim(claim.claimId)).toEqual({
+      operation_fingerprint_hash: claim.operationFingerprintHash,
       request_fingerprint_hash: null,
       request_ip_bucket_key: null,
       request_method: null,
@@ -239,6 +271,7 @@ describe("Paymaster D1 claim reservation", () => {
     await repository.release(claim.claimId);
 
     expect(await readClaim(claim.claimId)).toEqual({
+      operation_fingerprint_hash: claim.operationFingerprintHash,
       request_fingerprint_hash: null,
       request_ip_bucket_key: null,
       request_method: null,
